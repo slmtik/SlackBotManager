@@ -9,12 +9,13 @@ namespace SlackBotManager.API.MIddlewares;
 public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configuration)
 {
     private readonly RequestDelegate _next = next;
-    private readonly string _signingSecret = configuration["Slack:SLACK_SIGNING_SECRET"] ?? throw new ArgumentException("SLACK_SIGNING_SECRET");
+    private readonly string _signingSecret = configuration["Slack:SigningSecret"] ?? throw new ArgumentException("SigningSecret");
+
+    private static readonly string[] _slackPaths = ["/api/slack/commands", "/api/slack/events"];
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var endpoint = context.GetEndpoint()?.Metadata.GetMetadata<Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor>();
-        if (endpoint?.ControllerTypeInfo.AsType() == typeof(Controllers.SlackController))
+        if (_slackPaths.Contains(context.Request.Path.ToString()))
         {
             string body = string.Empty;
 

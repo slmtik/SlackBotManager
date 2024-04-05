@@ -1,3 +1,4 @@
+using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.MIddlewares;
 using SlackBotManager.API.Services;
 
@@ -15,6 +16,10 @@ builder.Services.AddHttpClient<SlackClient>((client) =>
     client.BaseAddress = new Uri("https://www.slack.com/api/");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+builder.Services.AddScoped<IOAuthStateStore, FileOAuthStateStore>();
+builder.Services.AddScoped<IInstallationStore, FileInstallationStore>();
+builder.Services.AddTransient<AuthorizationUrlGenerator>();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
@@ -25,12 +30,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
 app.MapControllers();
 
 app.UseMiddleware<SlackSignatureVerifier>();
+app.UseMiddleware<SlackTokenRotator>();
 
 app.Run();

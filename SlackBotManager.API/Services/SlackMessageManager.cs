@@ -25,7 +25,7 @@ public class SlackMessageManager
 
     public SlackMessageManager(SlackClient slackClient, IConfiguration configuration)
     {
-        _channelId = configuration["Slack:SLACK_CHANNEL_ID"]
+        _channelId = configuration["Slack:ChannelId"]
             ?? throw new ArgumentException("The slack channel is not set in the configuration", nameof(configuration));
         _slackClient = slackClient;
 
