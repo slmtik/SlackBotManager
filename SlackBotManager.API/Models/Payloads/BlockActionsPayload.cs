@@ -2,13 +2,16 @@
 
 namespace SlackBotManager.API.Models.Payloads;
 
-public class BlockActionsPayload : IPayload
+public class BlockActionsPayload : IInteractionPayload
 {
     public Action[] Actions { get; set; }
-    public string TriggerId { get; set; }
+    public required string TriggerId { get; set; }
     public View View { get; set; }
     public Message? Message { get; set; }
     public User User { get; set; }
     public Channel? Channel { get; set; }
+    public Team? Team { get; set; }
+    public Enterprise? Enterprise { get; set; }
+    public bool IsEnterpriseInstall { get; set; }
 
 }

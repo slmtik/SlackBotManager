@@ -1,5 +1,5 @@
 ﻿using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.OAuth;
+using SlackBotManager.API.Models.Stores;
 using SlackBotManager.API.Services;
 using System.Buffers;
 using System.IO.Pipelines;
@@ -11,78 +11,86 @@ namespace SlackBotManager.API.MIddlewares;
 
 public class SlackTokenRotator(RequestDelegate next)
 {
-    private static readonly string[] _slackPaths = ["/api/slack/commands", "/api/slack/events"];
-
     private readonly RequestDelegate _next = next;
 
     public async Task InvokeAsync(HttpContext context, IInstallationStore installationStore, SlackClient slackClient)
     {
-        if (_slackPaths.Contains(context.Request.Path.ToString()))
+        string rawBody = string.Empty;
+
+        ReadResult readResult = await context.Request.BodyReader.ReadAsync();
+        var buffer = readResult.Buffer;
+
+        if (readResult.IsCompleted && buffer.Length > 0)
+            rawBody = Encoding.UTF8.GetString(buffer.IsSingleSegment ? buffer.FirstSpan : buffer.ToArray().AsSpan());
+
+        context.Request.BodyReader.AdvanceTo(buffer.Start, buffer.End);
+
+        var (teamId, enterpriseId, isEnterpriseInstall, challenge) = ParseBody(rawBody, context.Request.Headers.ContentType.ToString());
+
+        if (!string.IsNullOrEmpty(challenge))
         {
-            string rawBody = string.Empty;
-
-            ReadResult readResult = await context.Request.BodyReader.ReadAsync();
-            var buffer = readResult.Buffer;
-
-            if (readResult.IsCompleted && buffer.Length > 0)
-                rawBody = Encoding.UTF8.GetString(buffer.IsSingleSegment ? buffer.FirstSpan : buffer.ToArray().AsSpan());
-
-            context.Request.BodyReader.AdvanceTo(buffer.Start, buffer.End);
-
-            var (teamId, userId, enterpriseId, isEnterpriseInstall) = ParseBody(rawBody);
-
-            await RotateToken(installationStore, slackClient, teamId, userId, enterpriseId, isEnterpriseInstall);
-
-            Bot? bot = installationStore.FindBot(enterpriseId, teamId, isEnterpriseInstall);
-
-            if (string.IsNullOrEmpty(bot?.BotToken))
-            {
-                context.Response.StatusCode = (int)HttpStatusCode.OK;
-                await context.Response.WriteAsync("Please install this app first!");
-                return;
-            }
-
-            context.Items["bot-token"] = bot?.BotToken;
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
+            await context.Response.WriteAsync(challenge);
+            return;
         }
+
+        await RotateToken(installationStore, slackClient, teamId, enterpriseId, isEnterpriseInstall);
+
+        Bot? bot = installationStore.FindBot(enterpriseId, teamId, isEnterpriseInstall);
+
+        if (string.IsNullOrEmpty(bot?.BotToken))
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.OK;
+            await context.Response.WriteAsync("Please install this app first!");
+            return;
+        }
+
+        context.Items["bot-token"] = bot?.BotToken;
 
         await _next(context);
     }
 
     
-    private static (string?, string?, string?, bool) ParseBody(string rawBody)
+    private static (string?, string?, bool?, string?) ParseBody(string body, string contentType)
     {
-        string? teamId;
-        string? userId;
+        string? teamId = null;
         string? enterpriseId = null;
-        bool isEnterpriseInstall;
+        bool? isEnterpriseInstall = null;
+        string? challenge = null;
 
-        var body = new Microsoft.AspNetCore.WebUtilities.FormReader(rawBody).ReadForm();
-        if (body.TryGetValue("payload", out var payload))
+        JsonNode? jsonBody = null;
+
+        if (contentType == "application/json" || body.StartsWith('{'))
         {
-            var jsonPayload = JsonNode.Parse(payload!)!;
-            teamId = (jsonPayload["team_id"] ?? jsonPayload["team"]?["id"] ?? jsonPayload["team"] ?? jsonPayload["user"]?["team_id"])?.ToString();
-            userId = (jsonPayload["user_id"] ?? jsonPayload["user"]?["id"] ?? jsonPayload["user"])?.ToString();
-            enterpriseId = (jsonPayload["enterprise_id"] ?? jsonPayload["enterprise"]?["id"] ?? jsonPayload["enterprise"])?.ToString();
-            isEnterpriseInstall = Convert.ToBoolean(jsonPayload["is_enterprise_install"]?.ToString());
+            var json = JsonNode.Parse(body);
+            if (json!["authorizations"] is JsonArray authorizations && authorizations.Count > 0)
+                jsonBody = authorizations[0]!;
+            else if (json!["type"]!.ToString() == "url_verification")
+                challenge = json["challenge"]!.ToString();
         }
         else
         {
-            teamId = body["team_id"];
-            userId = body["user_id"];
-            if (body.TryGetValue("enterprise_id", out _)) { enterpriseId = body["enterprise_id"]; }
-            isEnterpriseInstall = Convert.ToBoolean(body["is_enterprise_install"]);
+            var formBody = new Microsoft.AspNetCore.WebUtilities.FormReader(body).ReadForm();
+            if (formBody.TryGetValue("payload", out var payload))
+                jsonBody = JsonNode.Parse(payload!)!;
+            else
+                jsonBody = new JsonObject(formBody.Select(kvp => KeyValuePair.Create<string, JsonNode>(kvp.Key, kvp.Value.ToString()))!);
         }
-        return (teamId, userId, enterpriseId, isEnterpriseInstall);
+
+        teamId = (jsonBody?["team_id"] ?? jsonBody?["team"]?["id"] ?? jsonBody?["team"] ?? jsonBody?["user"]?["team_id"])?.ToString();
+        enterpriseId = (jsonBody?["enterprise_id"] ?? jsonBody?["enterprise"]?["id"] ?? jsonBody?["enterprise"])?.ToString();
+        isEnterpriseInstall = Convert.ToBoolean(jsonBody?["is_enterprise_install"]?.ToString());
+
+        return (teamId, enterpriseId, isEnterpriseInstall, challenge);
     }
 
     private static async Task RotateToken(IInstallationStore installationStore,
                                    SlackClient slackClient,
                                    string? teamId,
-                                   string? userId,
                                    string? enterpriseId,
-                                   bool isEnterpriseInstall)
+                                   bool? isEnterpriseInstall)
     {
-        var installation = installationStore.FindInstallation(enterpriseId, teamId, userId, isEnterpriseInstall);
+        var installation = installationStore.FindInstallation(enterpriseId, teamId, null, isEnterpriseInstall);
 
         if (installation != null)
         {

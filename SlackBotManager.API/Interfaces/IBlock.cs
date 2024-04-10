@@ -9,6 +9,7 @@ namespace SlackBotManager.API.Interfaces;
 [JsonDerivedType(typeof(DividerBlock), typeDiscriminator: "divider")]
 [JsonDerivedType(typeof(ActionBlock), typeDiscriminator: "actions")]
 [JsonDerivedType(typeof(ContextBlock), typeDiscriminator: "context")]
+[JsonDerivedType(typeof(HeaderBlock), typeDiscriminator: "header")]
 public interface IBlock
 {
     public string? BlockId { get; set; }

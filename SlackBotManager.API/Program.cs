@@ -10,7 +10,6 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddTransient<SlackMessageManager>();
 builder.Services.AddHttpClient<SlackClient>((client) =>
 {
     client.BaseAddress = new Uri("https://www.slack.com/api/");
@@ -18,8 +17,12 @@ builder.Services.AddHttpClient<SlackClient>((client) =>
 });
 builder.Services.AddScoped<IOAuthStateStore, FileOAuthStateStore>();
 builder.Services.AddScoped<IInstallationStore, FileInstallationStore>();
+builder.Services.AddScoped<ISettingStore, FileSettingStore>();
 builder.Services.AddTransient<AuthorizationUrlGenerator>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<CreatePullRequestInvocation>();
+builder.Services.AddScoped<HomeTabInvocation>();
+builder.Services.AddTransient<SlackMessageManager>();
 
 var app = builder.Build();
 
@@ -36,7 +39,14 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.UseMiddleware<SlackSignatureVerifier>();
-app.UseMiddleware<SlackTokenRotator>();
+app.UseWhen(
+    context => context.Request.Path.ToString() == "/api/slack/commands"
+                || context.Request.Path.ToString() == "/api/slack/interactions"
+                || context.Request.Path.ToString() == "/api/slack/events",
+    app =>
+    {
+        app.UseMiddleware<SlackSignatureVerifier>();
+        app.UseMiddleware<SlackTokenRotator>();
+    });
 
 app.Run();

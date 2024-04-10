@@ -1,7 +1,5 @@
 ﻿using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.OAuth;
-using SlackBotManager.API.Models.Payloads;
-using System.Reflection;
+using SlackBotManager.API.Models.Stores;
 using System.Text.Json;
 
 namespace SlackBotManager.API.Services;
@@ -10,14 +8,13 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
 {
     private const string _placeholder = "none";
 
-    private readonly string _directory = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!,
-                                                      configuration["Slack:InstallationStoreLocation"]);
-    private readonly bool _historicalDataEnabled = false;
+    private readonly string _directory = configuration["Slack:InstallationStoreLocation"] ??
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SlackBotManager", ".installation");
 
-    public Bot? FindBot(string? enterpriseId, string? teamId, bool isEnterpriseInstall)
+    public Bot? FindBot(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
-        teamId = teamId is null || isEnterpriseInstall ? _placeholder : teamId;
+        teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;
 
         var botFilePath = Path.Combine(_directory, $"{enterpriseId}-{teamId}", "bot-latest");
         Bot? bot = null;
@@ -31,10 +28,10 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
         return bot;
     }
 
-    public Installation? FindInstallation(string? enterpriseId, string? teamId, string? userId, bool isEnterpriseInstall)
+    public Installation? FindInstallation(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
-        teamId = teamId is null || isEnterpriseInstall ? _placeholder : teamId;
+        teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;
 
         string instalationFilePath;
         if (userId == null)
@@ -81,11 +78,16 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
 
         SaveBot(installation.ToBot());
 
-        if (_historicalDataEnabled) { }
-        else
+        var installerFilePath = Path.Combine(teamInstallationDir, $"installer-latest");
+        using (var writer = new StreamWriter(installerFilePath))
         {
-            var installerFilePath = Path.Combine(teamInstallationDir, $"installer-{userId}-latest");
-            using var writer = new StreamWriter(installerFilePath);
+            var content = JsonSerializer.Serialize(installation);
+            writer.Write(content);
+        }
+
+        installerFilePath = Path.Combine(teamInstallationDir, $"installer-{userId}-latest");
+        using (var writer = new StreamWriter(installerFilePath))
+        {
             var content = JsonSerializer.Serialize(installation);
             writer.Write(content);
         }
@@ -99,12 +101,8 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
         var teamInstallationDir = Path.Combine(_directory, $"{enterpriseId}-{teamId}");
         Directory.CreateDirectory(teamInstallationDir);
 
-        if (_historicalDataEnabled) { }
-        else
-        {
-            using var writer = new StreamWriter(Path.Combine(teamInstallationDir, "bot-latest"));
-            var content = JsonSerializer.Serialize(bot);
-            writer.Write(content);
-        }
+        using var writer = new StreamWriter(Path.Combine(teamInstallationDir, "bot-latest"));
+        var content = JsonSerializer.Serialize(bot);
+        writer.Write(content);
     }
 }

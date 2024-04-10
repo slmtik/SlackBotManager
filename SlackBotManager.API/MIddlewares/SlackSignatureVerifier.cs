@@ -11,27 +11,22 @@ public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configu
     private readonly RequestDelegate _next = next;
     private readonly string _signingSecret = configuration["Slack:SigningSecret"] ?? throw new ArgumentException("SigningSecret");
 
-    private static readonly string[] _slackPaths = ["/api/slack/commands", "/api/slack/events"];
-
     public async Task InvokeAsync(HttpContext context)
     {
-        if (_slackPaths.Contains(context.Request.Path.ToString()))
+        string body = string.Empty;
+
+        ReadResult readResult = await context.Request.BodyReader.ReadAsync();
+        var buffer = readResult.Buffer;
+
+        if (readResult.IsCompleted && buffer.Length > 0)
+            body = Encoding.UTF8.GetString(buffer.IsSingleSegment ? buffer.FirstSpan : buffer.ToArray().AsSpan());
+
+        context.Request.BodyReader.AdvanceTo(buffer.Start, buffer.End);
+
+        if (!ValidateSignature(body, context.Request.Headers))
         {
-            string body = string.Empty;
-
-            ReadResult readResult = await context.Request.BodyReader.ReadAsync();
-            var buffer = readResult.Buffer;
-
-            if (readResult.IsCompleted && buffer.Length > 0)
-                body = Encoding.UTF8.GetString(buffer.IsSingleSegment ? buffer.FirstSpan : buffer.ToArray().AsSpan());
-
-            context.Request.BodyReader.AdvanceTo(buffer.Start, buffer.End);
-
-            if (!ValidateSignature(body, context.Request.Headers))
-            {
-                context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
-                return;
-            }
+            context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+            return;
         }
         
         await _next(context);

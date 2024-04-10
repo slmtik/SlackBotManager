@@ -5,5 +5,5 @@ namespace SlackBotManager.API.Models.ElementStates;
 
 public class MultiStaticSelectState : IElementState
 {
-    public IEnumerable<OptionObject<PlainTextObject>>? SelectedOptions { get; set; }
+    public IEnumerable<Option<PlainText>>? SelectedOptions { get; set; }
 }

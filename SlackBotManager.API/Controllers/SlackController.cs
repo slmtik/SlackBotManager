@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.OAuth;
-using SlackBotManager.API.Models.SlackClient;
+using SlackBotManager.API.Models.Events;
+using SlackBotManager.API.Models.Stores;
 using SlackBotManager.API.Services;
+using SlackBotManager.API.Models.Commands;
+using SlackBotManager.API.Models.Core;
 
 namespace SlackBotManager.API.Controllers;
 
@@ -24,17 +26,31 @@ public class SlackController(SlackMessageManager slackMessageManager,
 
     [HttpPost]
     [Route("commands")]
-    public async Task<IActionResult> HandleCommands([FromForm] CommandRequest slackCommand)
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task<ActionResult> HandleCommands([FromForm] Command slackCommand)
     {
-        await _slackMessageManager.HandleCommand(slackCommand);
+        var requestResult = (RequestResult)await _slackMessageManager.HandleCommand(slackCommand);
+
+        if (!requestResult.IsSuccesful)
+            return Ok(requestResult.Error);
+        return Ok();
+    }
+
+    [HttpPost]
+    [Route("interactions")]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task<ActionResult> HandleInteractions([FromForm] string payload)
+    {
+        await _slackMessageManager.HandleInteractionPayload(payload);
         return Ok();
     }
 
     [HttpPost]
     [Route("events")]
-    public async Task<IActionResult> HandleEvents([FromForm] string payload)
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task<ActionResult> HandleEvents(EventPayload payload)
     {
-        await _slackMessageManager.HandlePayload(payload);
+        await _slackMessageManager.HandleEventPayload(payload);
         return Ok();
     }
 

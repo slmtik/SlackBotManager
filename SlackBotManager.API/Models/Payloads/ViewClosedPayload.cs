@@ -2,7 +2,7 @@
 
 namespace SlackBotManager.API.Models.Payloads;
 
-public class ViewClosedPayload : IPayload
+public class ViewClosedPayload : IInteractionPayload
 {
     public View View { get; set; }
 }

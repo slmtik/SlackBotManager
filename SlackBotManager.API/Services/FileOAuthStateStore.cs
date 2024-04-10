@@ -1,12 +1,12 @@
 ﻿using SlackBotManager.API.Interfaces;
-using System.Reflection;
 
 namespace SlackBotManager.API.Services;
 
 public class FileOAuthStateStore(IConfiguration configuration) : IOAuthStateStore
 {
-    private readonly string _directory = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, 
-                                                      configuration["Slack:OAuthStateStoreLocation"]);
+    private readonly string _directory = configuration["Slack:OAuthStateStoreLocation"] ??
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SlackBotManager", ".oauth-state");
+
     private readonly int _expirationSeconds = 300;
 
     public bool Consume(string state)

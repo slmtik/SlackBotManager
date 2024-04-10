@@ -1,6 +1,7 @@
-﻿namespace SlackBotManager.API.Interfaces
+﻿namespace SlackBotManager.API.Interfaces;
+
+public interface IView
 {
-    public class IView
-    {
-    }
+    public string Type { get; }
+    public IEnumerable<IBlock> Blocks { get; set; }
 }

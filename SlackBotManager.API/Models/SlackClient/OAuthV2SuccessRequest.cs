@@ -1,7 +1,4 @@
-﻿
-using System.Text;
-
-namespace SlackBotManager.API.Models.SlackClient;
+﻿namespace SlackBotManager.API.Models.SlackClient;
 
 public class OAuthV2SuccessRequest
 {

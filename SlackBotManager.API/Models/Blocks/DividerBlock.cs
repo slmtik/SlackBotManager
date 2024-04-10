@@ -1,9 +1,8 @@
 ﻿using SlackBotManager.API.Interfaces;
 
-namespace SlackBotManager.API.Models.Blocks
+namespace SlackBotManager.API.Models.Blocks;
+
+public class DividerBlock : IBlock
 {
-    public class DividerBlock : IBlock
-    {
-        public string? BlockId { get; set; }
-    }
+    public string? BlockId { get; set; }
 }

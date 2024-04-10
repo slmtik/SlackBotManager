@@ -7,6 +7,6 @@ namespace SlackBotManager.API.Interfaces;
 [JsonDerivedType(typeof(BlockActionsPayload), typeDiscriminator: "block_actions")]
 [JsonDerivedType(typeof(ViewSubmissionPayload), typeDiscriminator: "view_submission")]
 [JsonDerivedType(typeof(ViewClosedPayload), typeDiscriminator: "view_closed")]
-public interface IPayload
+public interface IInteractionPayload
 {
 }

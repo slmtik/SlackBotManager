@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.API.Models.OAuth;
+﻿namespace SlackBotManager.API.Models.Stores;
 
 public class Bot
 {

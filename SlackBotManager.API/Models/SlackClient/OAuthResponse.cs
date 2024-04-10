@@ -1,6 +1,6 @@
 ﻿namespace SlackBotManager.API.Models.SlackClient;
 
-public class OAuthResponse : SlackResponse
+public class OAuthResponse : BaseResponse
 {
     public Enterprise? Enterprise { get; set; }
     public bool IsEnterpriseInstall { get; set; }

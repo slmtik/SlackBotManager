@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.API.Models.Payloads;
+﻿using SlackBotManager.API.Interfaces;
+
+namespace SlackBotManager.API.Models.Payloads;
 
 public class View
 {
@@ -7,5 +9,7 @@ public class View
     public string RootViewId { get; set; }
     public string ViewCallBackId { get; set; }
     public string CallbackId { get; set; }
+    public string Type { get; set; }
+    public IBlock[]? Blocks { get; set; }
 
 }

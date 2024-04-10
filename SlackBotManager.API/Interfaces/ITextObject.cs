@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace SlackBotManager.API.Interfaces;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
-[JsonDerivedType(typeof(PlainTextObject), typeDiscriminator: "plain_text")]
-[JsonDerivedType(typeof(MarkdownTextObject), typeDiscriminator: "mrkdwn")]
+[JsonDerivedType(typeof(PlainText), typeDiscriminator: "plain_text")]
+[JsonDerivedType(typeof(MarkdownText), typeDiscriminator: "mrkdwn")]
 public interface ITextObject
 {
     public string Text { get; set; }

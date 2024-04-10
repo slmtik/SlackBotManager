@@ -1,4 +1,5 @@
 ﻿using SlackBotManager.API.Interfaces;
+using SlackBotManager.API.Models.Elements;
 using System.Text.Json.Serialization;
 
 namespace SlackBotManager.API.Models.Blocks;
@@ -25,4 +26,6 @@ public class SectionBlock : IBlock
     {
         Fields = fields;
     }
+
+    public SectionBlock(string text) : this(new PlainText(text)) { }
 }

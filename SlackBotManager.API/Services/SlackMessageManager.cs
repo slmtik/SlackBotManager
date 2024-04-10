@@ -1,75 +1,81 @@
-﻿using SlackBotManager.API.Models.SlackClient;
-using System.Text.Json;
+﻿using System.Text.Json;
 using SlackBotManager.API.Models.Payloads;
 using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Strategies;
+using SlackBotManager.API.Models.Events;
+using SlackBotManager.API.Models.Commands;
 
 namespace SlackBotManager.API.Services;
 
 public class SlackMessageManager
 {
-    private readonly string _channelId;
     private readonly SlackClient _slackClient;
+    private readonly ILogger<SlackMessageManager> _logger;
 
-    private readonly Dictionary<string, Func<SlackClient, CommandRequest, Task>> _commands = [];
+    private readonly Dictionary<string, Func<SlackClient, Command, Task<IRequestResult>>> _commands = [];
     private readonly Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task>> _viewSubmissionInteractions = [];
     private readonly Dictionary<string, Func<SlackClient, ViewClosedPayload, Task>> _viewClosedInteractions = [];
     private readonly Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task>> _blockActionsInteractions = [];
+    private readonly Dictionary<string, Func<SlackClient, EventPayload, Task>> _events = [];
 
-    private readonly JsonSerializerOptions _jsonSerializerOptions = new()
+    public SlackMessageManager(SlackClient slackClient,
+                               ILogger<SlackMessageManager> logger,
+                               CreatePullRequestInvocation createPullRequestInvocation,
+                               HomeTabInvocation homeTabInvocation)
     {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
-    public SlackMessageManager(SlackClient slackClient, IConfiguration configuration)
-    {
-        _channelId = configuration["Slack:ChannelId"]
-            ?? throw new ArgumentException("The slack channel is not set in the configuration", nameof(configuration));
         _slackClient = slackClient;
-
-        AddInteraction(new CreatePullRequestInteraction());
+        _logger = logger;
+        AddInvocation(createPullRequestInvocation, homeTabInvocation);
     }
 
-    public void AddInteraction(IInteraction strategy)
+    private void AddInvocation(params IInvocation[] invocations)
     {
-        if (strategy is ISlashCommand slashCommand)
-            foreach (var binding in slashCommand.CommandBindings)
-                _commands.Add(binding.Key, binding.Value);
+        foreach (var invocation in invocations)
+        {
+            if (invocation is ICommandInvocation commandInteraction)
+                foreach (var binding in commandInteraction.CommandBindings)
+                    _commands.Add(binding.Key, binding.Value);
 
-        if (strategy is IViewSubmissionInteraction viewSubmissionInteraction)
-            foreach (var binding in viewSubmissionInteraction.ViewSubmissionBindings)
-                _viewSubmissionInteractions.Add(binding.Key, binding.Value);
+            if (invocation is IViewSubmissionInvocation viewSubmissionInteraction)
+                foreach (var binding in viewSubmissionInteraction.ViewSubmissionBindings)
+                    _viewSubmissionInteractions.Add(binding.Key, binding.Value);
 
-        if (strategy is IViewClosedInteraction viewClosedInteraction)
-            foreach (var binding in viewClosedInteraction.ViewClosedBindings)
-                _viewClosedInteractions.Add(binding.Key, binding.Value);
+            if (invocation is IViewClosedInvocation viewClosedInteraction)
+                foreach (var binding in viewClosedInteraction.ViewClosedBindings)
+                    _viewClosedInteractions.Add(binding.Key, binding.Value);
 
-        if (strategy is IBlockActionsInteraction blockActionsInteraction)
-            foreach (var binding in blockActionsInteraction.BlockActionsBindings)
-                _blockActionsInteractions.Add(binding.Key, binding.Value);
+            if (invocation is IBlockActionsInvocation blockActionsInteraction)
+                foreach (var binding in blockActionsInteraction.BlockActionsBindings)
+                    _blockActionsInteractions.Add(binding.Key, binding.Value);
+
+            if (invocation is IEventInvocation eventInvocation)
+                foreach (var binding in eventInvocation.EventBindings)
+                    _events.Add(binding.Key, binding.Value);
+        }
     }
 
-    public Task HandleCommand(CommandRequest slackCommand)
+    public Task<IRequestResult> HandleCommand(Command slackCommand)
     {
-        if (slackCommand.ChannelId == _channelId)
-            return _commands[slackCommand.Command].Invoke(_slackClient, slackCommand);
+        return _commands[slackCommand.CommandText].Invoke(_slackClient, slackCommand);
+    }
+
+    public Task HandleInteractionPayload(string payloadString)
+    {
+        var payload = JsonSerializer.Deserialize<IInteractionPayload>(payloadString, SlackClient.SlackJsonSerializerOptions);
+        if (payload == null) return Task.CompletedTask;
+
+        if (payload is BlockActionsPayload blockActionsPayload)
+            return HandleBlockActionsPayload(blockActionsPayload);
+        else if (payload is ViewSubmissionPayload viewSubmissionPayload)
+            return HandleViewSubmissionPayload(viewSubmissionPayload);
+        else if (payload is ViewClosedPayload viewClosedPayload)
+            return HandleViewClosedPayload(viewClosedPayload);
+
         return Task.CompletedTask;
     }
 
-    public async Task HandlePayload(string payloadString)
+    public Task HandleEventPayload(EventPayload eventPayload)
     {
-        var payload = JsonSerializer.Deserialize<IPayload>(payloadString, _jsonSerializerOptions);
-        if (payload == null)
-            return;
-
-        if (payload is BlockActionsPayload blockActionsPayload)
-            await HandleBlockActionsPayload(blockActionsPayload);
-        else if (payload is ViewSubmissionPayload viewSubmissionPayload)
-            await HandleViewSubmissionPayload(viewSubmissionPayload);
-        else if (payload is ViewClosedPayload viewClosedPayload)
-            await HandleViewClosedPayload(viewClosedPayload);
+        return _events[eventPayload.Event!.Type!].Invoke(_slackClient, eventPayload);
     }
 
     private Task HandleViewSubmissionPayload(ViewSubmissionPayload viewSubmissionPayload) =>
@@ -78,6 +84,18 @@ public class SlackMessageManager
     private Task HandleViewClosedPayload(ViewClosedPayload viewClosedPayload) =>
         _viewClosedInteractions[viewClosedPayload.View.CallbackId].Invoke(_slackClient, viewClosedPayload);
 
-    private Task HandleBlockActionsPayload(BlockActionsPayload payload) =>
-        _blockActionsInteractions[(payload.Actions.First().BlockId, payload.Actions.First().ActionId)].Invoke(_slackClient, payload);
+    private Task HandleBlockActionsPayload(BlockActionsPayload payload)
+    {
+        if(_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteraction))
+            return bloackActionsInteraction.Invoke(_slackClient, payload);
+
+        _logger.LogWarning("The requested block action payload is not handled yet " +
+                           "(ViewType: {ViewType}, ViewCallbackId: {CallbackId}, BlockId: {BlockId}, ActionId: {ActionId})",
+                           payload.View.Type,
+                           payload.View.CallbackId,
+                           payload.Actions.First().BlockId,
+                           payload.Actions.First().ActionId);
+
+        return Task.CompletedTask;
+    }
 }
