@@ -1,10 +1,8 @@
-﻿using SlackBotManager.API.Interfaces;
+﻿using SlackBotManager.API.Core;
+using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.Models.Stores;
 using SlackBotManager.API.Services;
-using System.Buffers;
-using System.IO.Pipelines;
 using System.Net;
-using System.Text;
 using System.Text.Json.Nodes;
 
 namespace SlackBotManager.API.MIddlewares;
@@ -15,15 +13,9 @@ public class SlackTokenRotator(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context, IInstallationStore installationStore, SlackClient slackClient)
     {
-        string rawBody = string.Empty;
-
-        ReadResult readResult = await context.Request.BodyReader.ReadAsync();
-        var buffer = readResult.Buffer;
-
-        if (readResult.IsCompleted && buffer.Length > 0)
-            rawBody = Encoding.UTF8.GetString(buffer.IsSingleSegment ? buffer.FirstSpan : buffer.ToArray().AsSpan());
-
-        context.Request.BodyReader.AdvanceTo(buffer.Start, buffer.End);
+        context.Request.EnableBuffering();
+        string rawBody = await context.Request.BodyReader.GetStringFromPipe();
+        context.Request.Body.Position = 0;
 
         var (teamId, enterpriseId, isEnterpriseInstall, challenge) = ParseBody(rawBody, context.Request.Headers.ContentType.ToString());
 
@@ -50,7 +42,6 @@ public class SlackTokenRotator(RequestDelegate next)
         await _next(context);
     }
 
-    
     private static (string?, string?, bool?, string?) ParseBody(string body, string contentType)
     {
         string? teamId = null;

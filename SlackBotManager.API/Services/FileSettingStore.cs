@@ -9,7 +9,7 @@ public class FileSettingStore(IConfiguration configuration) : ISettingStore
     private const string _placeholder = "none";
 
     private readonly string _directory = configuration["Slack:InstallationStoreLocation"] ??
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SlackBotManager", ".setting");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SlackBotManager", ".setting");
 
     public Setting? FindSetting(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
     {

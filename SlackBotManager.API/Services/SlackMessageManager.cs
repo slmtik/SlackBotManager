@@ -3,6 +3,7 @@ using SlackBotManager.API.Models.Payloads;
 using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.Models.Events;
 using SlackBotManager.API.Models.Commands;
+using SlackBotManager.API.Models.Core;
 
 namespace SlackBotManager.API.Services;
 
@@ -55,7 +56,12 @@ public class SlackMessageManager
 
     public Task<IRequestResult> HandleCommand(Command slackCommand)
     {
-        return _commands[slackCommand.CommandText].Invoke(_slackClient, slackCommand);
+        if(_commands.TryGetValue(slackCommand.CommandText, out var commandHandler))
+            return _commands[slackCommand.CommandText].Invoke(_slackClient, slackCommand);
+
+        _logger.LogWarning("The requested command is not handled yet. Command: {Command}", slackCommand.CommandText);
+
+        return Task.FromResult<IRequestResult>(RequestResult.Failure("Command is not handled yet"));
     }
 
     public Task HandleInteractionPayload(string payloadString)
@@ -86,10 +92,10 @@ public class SlackMessageManager
 
     private Task HandleBlockActionsPayload(BlockActionsPayload payload)
     {
-        if(_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteraction))
-            return bloackActionsInteraction.Invoke(_slackClient, payload);
+        if(_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteractionHandler))
+            return bloackActionsInteractionHandler.Invoke(_slackClient, payload);
 
-        _logger.LogWarning("The requested block action payload is not handled yet " +
+        _logger.LogWarning("The requested block action interaction is not handled yet. " +
                            "(ViewType: {ViewType}, ViewCallbackId: {CallbackId}, BlockId: {BlockId}, ActionId: {ActionId})",
                            payload.View.Type,
                            payload.View.CallbackId,

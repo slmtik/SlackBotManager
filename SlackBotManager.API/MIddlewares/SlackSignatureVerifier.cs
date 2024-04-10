@@ -1,5 +1,4 @@
-﻿using System.Buffers;
-using System.IO.Pipelines;
+﻿using SlackBotManager.API.Core;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,19 +8,13 @@ namespace SlackBotManager.API.MIddlewares;
 public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configuration)
 {
     private readonly RequestDelegate _next = next;
-    private readonly string _signingSecret = configuration["Slack:SigningSecret"] ?? throw new ArgumentException("SigningSecret");
+    private readonly string _signingSecret = configuration["Slack:SigningSecret"];
 
     public async Task InvokeAsync(HttpContext context)
     {
-        string body = string.Empty;
-
-        ReadResult readResult = await context.Request.BodyReader.ReadAsync();
-        var buffer = readResult.Buffer;
-
-        if (readResult.IsCompleted && buffer.Length > 0)
-            body = Encoding.UTF8.GetString(buffer.IsSingleSegment ? buffer.FirstSpan : buffer.ToArray().AsSpan());
-
-        context.Request.BodyReader.AdvanceTo(buffer.Start, buffer.End);
+        context.Request.EnableBuffering();
+        var body = await context.Request.BodyReader.GetStringFromPipe();
+        context.Request.Body.Position = 0;
 
         if (!ValidateSignature(body, context.Request.Headers))
         {
@@ -37,28 +30,22 @@ public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configu
         if (headers == null)
             return false;
 
-        headers.TryGetValue("X-Slack-Request-Timestamp", out var timestamp);
-        headers.TryGetValue("X-Slack-Signature", out var signature);
+        headers.TryGetValue("X-Slack-Request-Timestamp", out var timestampValue);
+        headers.TryGetValue("X-Slack-Signature", out var signatureValue);
 
-        return ValidateSignature(body, timestamp.FirstOrDefault() ?? string.Empty, signature.FirstOrDefault() ?? string.Empty);
-    }
+        var signature = signatureValue.ToString();
 
-    private bool ValidateSignature(string body, string timestamp, string signature)
-    {
-        if (string.IsNullOrEmpty(timestamp) || string.IsNullOrEmpty(signature))
+        if (string.IsNullOrEmpty(signature) || !long.TryParse(timestampValue, out var timestamp))
             return false;
 
-        if (Math.Abs(DateTimeOffset.Now.ToUnixTimeSeconds() - long.Parse(timestamp)) > 60 * 5)
+        if (Math.Abs(DateTimeOffset.Now.ToUnixTimeSeconds() - timestamp) > 60 * 5)
             return false;
 
         return signature == GenerateSignature(timestamp, body);
     }
 
-    private string? GenerateSignature(string timestamp, string stringToSign)
+    private string? GenerateSignature(long timestamp, string stringToSign)
     {
-        if (string.IsNullOrEmpty(timestamp))
-            return null;
-
         if (string.IsNullOrEmpty(stringToSign))
             stringToSign = string.Empty;
 

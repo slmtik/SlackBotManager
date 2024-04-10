@@ -58,11 +58,11 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
     {
         var setting = _settingStore.FindSetting(commandRequest.EnterpriseId, commandRequest.TeamId, commandRequest.IsEnterpriseInstall);
         if (string.IsNullOrEmpty(setting?.CreatePullRequestChannelId))
-            return RequestResult.Failue("Please set the *Channel to post Messages* setting");
+            return RequestResult.Failure("Please set the *Channel to post Messages* setting");
 
         var conversationInfo = await slackClient.ConversationsInfo(setting.CreatePullRequestChannelId);
         if (!conversationInfo.Channel.IsMember)
-            return RequestResult.Failue("Please add the App to the channel from the *Channel to post Messages* setting");
+            return RequestResult.Failure("Please add the App to the channel from the *Channel to post Messages* setting");
 
         await ShowCreatePullRequestView(slackClient, setting.CreatePullRequestChannelId, commandRequest.UserId, commandRequest.TriggerId);
         return RequestResult.Success();

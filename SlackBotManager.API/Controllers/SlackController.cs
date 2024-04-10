@@ -14,7 +14,8 @@ public class SlackController(SlackMessageManager slackMessageManager,
                              IOAuthStateStore oAuthStateStore,
                              AuthorizationUrlGenerator authorizationUrlGenerator,
                              SlackClient slackClient,
-                             IInstallationStore installationStore) : ControllerBase
+                             IInstallationStore installationStore,
+                             IHostEnvironment hostEnvironment) : ControllerBase
 {
     private const string _routeToOAuthStart = "/api/slack/install";
 
@@ -23,12 +24,18 @@ public class SlackController(SlackMessageManager slackMessageManager,
     private readonly AuthorizationUrlGenerator _authorizationUrlGenerator = authorizationUrlGenerator;
     private readonly SlackClient _slackClient = slackClient;
     private readonly IInstallationStore _installationStore = installationStore;
+    private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
 
     [HttpPost]
     [Route("commands")]
-    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<ActionResult> HandleCommands([FromForm] Command slackCommand)
     {
+        string commandPrefix = "/";
+        if (_hostEnvironment.IsDevelopment() || _hostEnvironment.IsStaging())
+            commandPrefix = $"/{(_hostEnvironment.IsDevelopment() ? "dev" : "stage")}_";
+
+        slackCommand.CommandText = $"/{slackCommand.CommandText[commandPrefix.Length..]}";
+
         var requestResult = (RequestResult)await _slackMessageManager.HandleCommand(slackCommand);
 
         if (!requestResult.IsSuccesful)
@@ -38,7 +45,6 @@ public class SlackController(SlackMessageManager slackMessageManager,
 
     [HttpPost]
     [Route("interactions")]
-    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<ActionResult> HandleInteractions([FromForm] string payload)
     {
         await _slackMessageManager.HandleInteractionPayload(payload);
@@ -47,7 +53,6 @@ public class SlackController(SlackMessageManager slackMessageManager,
 
     [HttpPost]
     [Route("events")]
-    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<ActionResult> HandleEvents(EventPayload payload)
     {
         await _slackMessageManager.HandleEventPayload(payload);

@@ -9,7 +9,7 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
     private const string _placeholder = "none";
 
     private readonly string _directory = configuration["Slack:InstallationStoreLocation"] ??
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SlackBotManager", ".installation");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SlackBotManager", ".installation");
 
     public Bot? FindBot(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
     {
