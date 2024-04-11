@@ -301,13 +301,13 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
 
         var reviewersBlocks = new List<IElement>() { new PlainText("Reviewing:") };
         foreach (var item in reviewing)
-            reviewersBlocks.Add(new Image(userProfiles[userId].DisplayName, userProfiles[userId].Image_24));
+            reviewersBlocks.Add(new Image(userProfiles[item].DisplayName, userProfiles[item].Image_24));
 
         if (approved.Count > 0)
         {
             reviewersBlocks.Add(new PlainText("Approved:"));
             foreach (var item in approved)
-                reviewersBlocks.Add(new Image(userProfiles[userId].DisplayName, userProfiles[userId].Image_24));
+                reviewersBlocks.Add(new Image(userProfiles[item].DisplayName, userProfiles[item].Image_24));
         }
 
         var reviewersBlock = new ContextBlock(reviewersBlocks) { BlockId = "reviewers" };
@@ -336,7 +336,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         messageBlocks.RemoveAll(b => b is ContextBlock && b.BlockId == "reviewers" || b is ActionBlock && b.BlockId == "pull_request_status");
 
         var branches = payload.Message.Metadata.EventPayload["branches"].Deserialize<IEnumerable<string>>() ?? [];
-        var userProfiles = payload.Message.Metadata.EventPayload["user_profiles"].Deserialize<Dictionary<string, Profile>>() ?? [];
+        var userProfiles = payload.Message.Metadata.EventPayload["user_profiles"].Deserialize<Dictionary<string, Profile>>(SlackClient.SlackJsonSerializerOptions) ?? [];
 
         string displayName;
         if (userProfiles.TryGetValue(payload.User.Id, out Profile? profile))
