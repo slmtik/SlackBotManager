@@ -114,16 +114,17 @@ public class SlackTokenRotator(RequestDelegate next)
         if (bot.BotTokenExpiresAt == null || bot.BotTokenExpiresAt > DateTimeOffset.UtcNow.ToUnixTimeSeconds() + minutesBeforeExpiration * 60)
             return null;
 
-        var oAuthResponse = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = bot.BotRefreshToken });
+        var oAuthResult = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = bot.BotRefreshToken });
+        var oAuthData = oAuthResult.Value;
 
-        if (oAuthResponse.TokenType != "bot")
+        if (oAuthData.TokenType != "bot")
             return null;
 
         Bot refreshedBot = new(bot)
         {
-            BotToken = oAuthResponse.AccessToken,
-            BotRefreshToken = oAuthResponse.RefreshToken,
-            BotTokenExpiresAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + oAuthResponse.ExpiresIn
+            BotToken = oAuthData.AccessToken,
+            BotRefreshToken = oAuthData.RefreshToken,
+            BotTokenExpiresAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + oAuthData.ExpiresIn
         };
         return refreshedBot;
     }
@@ -133,16 +134,17 @@ public class SlackTokenRotator(RequestDelegate next)
         if (installation.UserTokenExpiresAt == null || installation.UserTokenExpiresAt > DateTimeOffset.UtcNow.ToUnixTimeSeconds() + minutesBeforeExpiration * 60)
             return null;
 
-        var oAuthResponse = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.UserRefreshToken });
+        var oAuthResult = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.UserRefreshToken });
+        var oAuthData = oAuthResult.Value;
 
-        if (oAuthResponse.TokenType != "user")
+        if (oAuthData.TokenType != "user")
             return null;
 
         Installation refreshedInstallation = new(installation)
         {
-            UserToken = oAuthResponse.AccessToken,
-            UserRefreshToken = oAuthResponse.RefreshToken,
-            UserTokenExpiresAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + oAuthResponse.ExpiresIn
+            UserToken = oAuthData.AccessToken,
+            UserRefreshToken = oAuthData.RefreshToken,
+            UserTokenExpiresAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + oAuthData.ExpiresIn
         };
 
         return refreshedInstallation;

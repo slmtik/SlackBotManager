@@ -5,6 +5,8 @@ using System.Web;
 using SlackBotManager.API.Models.SlackClient;
 using SlackBotManager.API.Models.Surfaces;
 using SlackBotManager.API.Models.Views;
+using SlackBotManager.API.Interfaces;
+using SlackBotManager.API.Models.Core;
 
 namespace SlackBotManager.API.Services;
 
@@ -27,62 +29,68 @@ public class SlackClient(HttpClient httpClient,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    private Task<BaseResponse> ApiCall(HttpRequestMessage request) =>
-        ApiCall<BaseResponse>(request);
+    private async Task<IRequestResult> ApiCall(HttpRequestMessage request)
+    {
+        var result = await ApiCall<BaseResponse>(request);
 
-    private async Task<T> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse
+        return result.IsSuccesful switch
+        {
+            true => RequestResult.Success(),
+            false => RequestResult.Failure(result.Error!)
+        };
+    }
+
+    private async Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse 
     {
         request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext!.Items["bot-token"]!.ToString());
 
         var responseMessage = await _httpClient.SendAsync(request);
         responseMessage.EnsureSuccessStatusCode();
-        var result = await responseMessage.Content.ReadFromJsonAsync<T>(SlackJsonSerializerOptions);
+        T result = (await responseMessage.Content.ReadFromJsonAsync<T>(SlackJsonSerializerOptions))!;
         
         _logger.LogDebug("Slack Api response {HttpMethod} {RequestUri}:\n{ResponseMessage}", 
             request.Method,
             request.RequestUri,
             await responseMessage.Content.ReadAsStringAsync());
 
-        if (!result!.Ok)
+        if (!result.Ok)
         {
-            if (result.ResponseMetadata != null)
-                _logger.LogError("Slack API request {HttpMethod} {RequestUri} was not OK. There are {ErrorNumber} error(s). \n{ResponseMetadata}",
-                               request.Method,
-                               request.RequestUri,
-                               result.ResponseMetadata.Messages?.Length,
-                               string.Join("\n", result.ResponseMetadata.Messages ?? []));
-            else
-                _logger.LogError("Slack API error {SlackError}", result.Error);
+            _logger.LogError("Slack API error {HttpMethod} {RequestUri} {SlackError}\n{ResponseMetadata}",
+                             request.Method,
+                             request.RequestUri,
+                             result.Error,
+                             string.Join("\n", result.ResponseMetadata?.Messages ?? []));
+            return RequestResult<T>.Failure(result.Error ?? string.Empty);
         }
 
-        return result;
+        return RequestResult<T>.Success(result);
     }
 
     #region Chat
-    public Task<ChatPostMessageResponse> ChatPostMessage(ChatPostMessageRequest message)
+    public Task<IRequestResult<ChatPostMessageResponse>> ChatPostMessage(ChatPostMessageRequest message)
     {
         string body = JsonSerializer.Serialize(message, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall<ChatPostMessageResponse>(new(HttpMethod.Post, "chat.postMessage") { Content = content });
     }
 
-    public Task<BaseResponse> ChatUpdateMessage(ChaUpdateMessageRequest message)
+    public Task<IRequestResult> ChatUpdateMessage(ChaUpdateMessageRequest message)
     {
         string body = JsonSerializer.Serialize(message, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
-        return ApiCall<BaseResponse>(new(HttpMethod.Post, "chat.update") { Content = content });
+        return ApiCall(new(HttpMethod.Post, "chat.update") { Content = content });
     }
 
-    public Task<BaseResponse> ChatDeleteMessage(string channel, string timestampId)
+    public Task<IRequestResult> ChatDeleteMessage(string channel, string timestampId)
     {
         var body = JsonSerializer.Serialize(new { channel, ts = timestampId }, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
-        return ApiCall<BaseResponse>(new(HttpMethod.Post, "chat.delete") { Content = content });
+        return ApiCall(new(HttpMethod.Post, "chat.delete") { Content = content });
     }
     #endregion
 
     #region Users
-    public Task<UserInfoResponse> UserInfo(string userId)
+    public Task<IRequestResult<UserInfoResponse>> UserInfo(string userId)
     {
         var query = HttpUtility.ParseQueryString(string.Empty);
         query["user"] = userId;
@@ -92,28 +100,28 @@ public class SlackClient(HttpClient httpClient,
     #endregion
 
     #region Views
-    public Task<BaseResponse> ViewOpen(string triggerId, ModalView modalView)
+    public Task<IRequestResult> ViewOpen(string triggerId, ModalView modalView)
     {
         var body = JsonSerializer.Serialize(new { triggerId, view = modalView }, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.open") { Content = content });
     }
 
-    public Task<BaseResponse> ViewPush(string triggerId, ModalView modalView)
+    public Task<IRequestResult> ViewPush(string triggerId, ModalView modalView)
     {
         var body = JsonSerializer.Serialize(new { triggerId, view = modalView }, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.push") { Content = content });
     }
 
-    public Task<BaseResponse> ViewUpdate(string viewId, ModalView modalView)
+    public Task<IRequestResult> ViewUpdate(string viewId, ModalView modalView)
     {
         var body = JsonSerializer.Serialize(new { viewId, view = modalView }, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.update") { Content = content });
     }
 
-    public Task<BaseResponse> ViewPublish(string user_id, HomeView homeView)
+    public Task<IRequestResult> ViewPublish(string user_id, HomeView homeView)
     {
         var body = JsonSerializer.Serialize(new { user_id, view = homeView }, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
@@ -122,7 +130,7 @@ public class SlackClient(HttpClient httpClient,
     #endregion
 
     #region OAuth
-    public Task<OAuthResponse> OAuthV2Success(OAuthV2SuccessRequest message)
+    public Task<IRequestResult<OAuthResponse>> OAuthV2Success(OAuthV2SuccessRequest message)
     {
         FormUrlEncodedContent content = new(message.ToDictionary());
         HttpRequestMessage request = new(HttpMethod.Post, "oauth.v2.access") { Content = content };
@@ -130,7 +138,7 @@ public class SlackClient(HttpClient httpClient,
         return ApiCall<OAuthResponse>(request);
     }
 
-    public Task<AuthTestResponse> AuthTest(string accessToken)
+    public Task<IRequestResult<AuthTestResponse>> AuthTest(string accessToken)
     {
         HttpRequestMessage request = new(HttpMethod.Post, "auth.test");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -139,7 +147,7 @@ public class SlackClient(HttpClient httpClient,
     #endregion
 
     # region Conversations
-    public Task<ConversationInfoResponse> ConversationsInfo(string channelId)
+    public Task<IRequestResult<ConversationInfoResponse>> ConversationsInfo(string channelId)
     {
         var query = HttpUtility.ParseQueryString(string.Empty);
         query["channel"] = channelId;

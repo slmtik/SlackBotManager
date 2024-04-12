@@ -36,7 +36,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
 
         slackCommand.CommandText = $"/{slackCommand.CommandText[commandPrefix.Length..]}";
 
-        var requestResult = (RequestResult)await _slackMessageManager.HandleCommand(slackCommand);
+        var requestResult = await _slackMessageManager.HandleCommand(slackCommand);
 
         if (!requestResult.IsSuccesful)
             return Ok(requestResult.Error);
@@ -89,40 +89,41 @@ public class SlackController(SlackMessageManager slackMessageManager,
             if (!_oAuthStateStore.Consume(state))
                 return base.Content(RenderFailurePage("the state value is already expired"), "text/html");
 
-            var oauthResponse = await _slackClient.OAuthV2Success(new() { Code = code });
+            var oAuthResult = await _slackClient.OAuthV2Success(new() { Code = code });
+            var oAuthData = oAuthResult.Value;
 
             string? botId = null;
             string? enterpriseUrl = null;
-            if (!string.IsNullOrEmpty(oauthResponse.AccessToken))
+            if (oAuthResult.IsSuccesful && !string.IsNullOrEmpty(oAuthData.AccessToken))
             {
-                var authTestResponse = await _slackClient.AuthTest(oauthResponse.AccessToken);
-                botId = authTestResponse.BotId;
+                var authTestResult = await _slackClient.AuthTest(oAuthData.AccessToken);
+                botId = authTestResult.Value.BotId;
 
-                if (oauthResponse.IsEnterpriseInstall)
-                    enterpriseUrl = authTestResponse.Url;
+                if (oAuthData.IsEnterpriseInstall)
+                    enterpriseUrl = authTestResult.Value.Url;
             }
 
             var installation = new Installation()
             {
-                AppId = oauthResponse.AppId,
-                EnterpriseId = oauthResponse.Enterprise?.Id,
-                EnterpriseName = oauthResponse.Enterprise?.Name,
+                AppId = oAuthData.AppId,
+                EnterpriseId = oAuthData.Enterprise?.Id,
+                EnterpriseName = oAuthData.Enterprise?.Name,
                 EnterpriseUrl = enterpriseUrl,
-                TeamId = oauthResponse.Team?.Id,
-                TeamName = oauthResponse.Team?.Name,
+                TeamId = oAuthData.Team?.Id,
+                TeamName = oAuthData.Team?.Name,
                 BotId = botId,
-                BotToken = oauthResponse.AccessToken,
-                BotUserId = oauthResponse.BotUserId,
-                BotScopes = oauthResponse.Scope,
-                BotRefreshToken = oauthResponse.RefreshToken,
-                BotTokenExpiresIn = oauthResponse.ExpiresIn,
-                UserId = oauthResponse.AuthedUser?.Id,
-                UserToken = oauthResponse.AuthedUser?.AccessToken,
-                UserScopes = oauthResponse.AuthedUser?.Scope,
-                UserRefreshToken = oauthResponse.AuthedUser?.RefreshToken,
-                UserTokenExpiresIn = oauthResponse.AuthedUser?.ExpiresIn,
-                IsEnterpriseInstall = oauthResponse.IsEnterpriseInstall,
-                TokenType = oauthResponse.TokenType
+                BotToken = oAuthData.AccessToken,
+                BotUserId = oAuthData.BotUserId,
+                BotScopes = oAuthData.Scope,
+                BotRefreshToken = oAuthData.RefreshToken,
+                BotTokenExpiresIn = oAuthData.ExpiresIn,
+                UserId = oAuthData.AuthedUser?.Id,
+                UserToken = oAuthData.AuthedUser?.AccessToken,
+                UserScopes = oAuthData.AuthedUser?.Scope,
+                UserRefreshToken = oAuthData.AuthedUser?.RefreshToken,
+                UserTokenExpiresIn = oAuthData.AuthedUser?.ExpiresIn,
+                IsEnterpriseInstall = oAuthData.IsEnterpriseInstall,
+                TokenType = oAuthData.TokenType
             };
             _installationStore.Save(installation);
             return base.Content(RenderSuccessPage(installation.AppId, installation.TeamId, installation.IsEnterpriseInstall, installation.EnterpriseUrl),

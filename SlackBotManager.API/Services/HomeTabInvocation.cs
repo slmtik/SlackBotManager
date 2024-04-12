@@ -39,7 +39,7 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
                                                Setting? setting,
                                                params (string BlockId, string Message)[] validationMessages)
     {
-        var userInfo = await slackClient.UserInfo(userId);
+        var userInfoResult = await slackClient.UserInfo(userId);
 
         List<IBlock> blocks =
         [
@@ -50,7 +50,7 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
             }
         ];
 
-        if (userInfo.User.IsAdmin || (setting?.ApplicationAdminUsers?.Contains(userId) ?? false))
+        if (userInfoResult.Value.User.IsAdmin || (setting?.ApplicationAdminUsers?.Contains(userId) ?? false))
         {
             blocks.AddRange(
             [
@@ -95,22 +95,13 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
     private async Task CreatePullRequest(SlackClient slackClient, BlockActionsPayload payload)
     {
         var setting = _settingStore.FindSetting(payload.Enterprise?.Id, payload.Team?.Id, payload.IsEnterpriseInstall);
-        if (string.IsNullOrEmpty(setting?.CreatePullRequestChannelId))
-        {
-            var validation = ("pull_request", "Please set the *Channel to post Messages* setting");
-            await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting, validation));
-            return;
-        }
+        var result = await CreatePullRequestInvocation.ShowCreatePullRequestView(slackClient,
+                                                                                 setting?.CreatePullRequestChannelId,
+                                                                                 payload.User.Id,
+                                                                                 payload.TriggerId);
 
-        var conversationInfo = await slackClient.ConversationsInfo(setting.CreatePullRequestChannelId);
-        if (!conversationInfo.Channel.IsMember)
-        {
-            var validation = ("pull_request", "Please add the App to the channel from the *Channel to post Messages* setting");
-            await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting, validation));
-            return;
-        }
-
-        await CreatePullRequestInvocation.ShowCreatePullRequestView(slackClient, setting.CreatePullRequestChannelId, payload.User.Id, payload.TriggerId);
+        if (!result.IsSuccesful)
+            await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting, ("pull_request", result.Error!)));
     }
 
     private async Task SetChannelToPost(SlackClient slackClient, BlockActionsPayload payload)

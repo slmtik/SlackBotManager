@@ -54,29 +54,31 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         _settingStore = settingStore;
     }
 
-    private async Task<IRequestResult> ShowCreatePullRequestView(SlackClient slackClient, Command commandRequest)
+    private Task<IRequestResult> ShowCreatePullRequestView(SlackClient slackClient, Command commandRequest)
     {
         var setting = _settingStore.FindSetting(commandRequest.EnterpriseId, commandRequest.TeamId, commandRequest.IsEnterpriseInstall);
-        if (string.IsNullOrEmpty(setting?.CreatePullRequestChannelId))
-            return RequestResult.Failure("Please set the *Channel to post Messages* setting");
-
-        var conversationInfo = await slackClient.ConversationsInfo(setting.CreatePullRequestChannelId);
-        if (!conversationInfo.Channel.IsMember)
-            return RequestResult.Failure("Please add the App to the channel from the *Channel to post Messages* setting");
-
-        await ShowCreatePullRequestView(slackClient, setting.CreatePullRequestChannelId, commandRequest.UserId, commandRequest.TriggerId);
-        return RequestResult.Success();
+        return ShowCreatePullRequestView(slackClient, setting?.CreatePullRequestChannelId, commandRequest.UserId, commandRequest.TriggerId);
     }
 
-    public static async Task ShowCreatePullRequestView(SlackClient slackClient, string channelId, string userId, string triggerId)
+    public static async Task<IRequestResult> ShowCreatePullRequestView(SlackClient slackClient, string? channelId, string userId, string triggerId)
     {
-        var userInfo = await slackClient.UserInfo(userId);
+        if (string.IsNullOrEmpty(channelId))
+            return RequestResult.Failure("Please set the *Channel to post Messages* setting");
 
-        string message = $"{userInfo.User.Profile.DisplayName} is creating a new pull request";
-        var postMessage = await slackClient.ChatPostMessage(new(channelId, message));
+        var userInfoResult = await slackClient.UserInfo(userId);
+        string message = $"{userInfoResult.Value!.User!.Profile!.DisplayName} is creating a new pull request";
+        var postMessageResult = await slackClient.ChatPostMessage(new(channelId, message));
+        if (!postMessageResult.IsSuccesful)
+            return postMessageResult.Error switch
+            {
+                "not_in_channel" => RequestResult.Failure("Please add the App to the channel from the *Channel to post Messages* setting"),
+                _ => RequestResult.Failure("Unknown error")
+            };
 
-        var newPullRequest = new PullRequest(channelId, postMessage.TimeStampId) { Branches = ["develop"], IssuesNumber = 1 };
+        var newPullRequest = new PullRequest(channelId, postMessageResult.Value!.TimeStampId) { Branches = ["develop"], IssuesNumber = 1 };
         await slackClient.ViewOpen(triggerId, BuildCreatePullRequestModal(newPullRequest));
+        
+        return RequestResult.Success();
     }
 
     private static ModalView BuildCreatePullRequestModal(PullRequest pullRequest)
@@ -180,7 +182,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
             blocks.Add(new ContextBlock(tags.Select(t => new PlainText(t))));
         }
 
-        var postMessage = await slackClient.ChatPostMessage(new ChatPostMessageRequest(pullRequest.ChannelId, blocks)
+        var postMessageResult = await slackClient.ChatPostMessage(new ChatPostMessageRequest(pullRequest.ChannelId, blocks)
         {
             UnfurlLinks = true,
             Metadata = new()
@@ -297,7 +299,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         var userProfiles = message.Metadata!.EventPayload["user_profiles"].Deserialize<Dictionary<string, Profile>>(SlackClient.SlackJsonSerializerOptions) ?? [];
 
         if (!userProfiles.ContainsKey(userId))
-            userProfiles[userId] = (await slackClient.UserInfo(userId)).User.Profile;
+            userProfiles[userId] = (await slackClient.UserInfo(userId)).Value.User.Profile;
 
         var reviewersBlocks = new List<IElement>() { new PlainText("Reviewing:") };
         foreach (var item in reviewing)
@@ -342,7 +344,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         if (userProfiles.TryGetValue(payload.User.Id, out Profile? profile))
             displayName = profile.DisplayName;
         else
-            displayName = (await slackClient.UserInfo(payload.User.Id)).User.Profile.DisplayName;
+            displayName = (await slackClient.UserInfo(payload.User.Id)).Value.User.Profile.DisplayName;
 
         string threadMessage, channelMessage;
         if (pullRequestStatus == PullRequestStatus.Close)
