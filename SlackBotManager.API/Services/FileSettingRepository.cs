@@ -1,17 +1,17 @@
 ﻿using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.Stores;
+using SlackBotManager.API.Models.Repositories;
 using System.Text.Json;
 
 namespace SlackBotManager.API.Services;
 
-public class FileSettingStore(IConfiguration configuration) : ISettingStore
+public class FileSettingRepository(IConfiguration configuration) : ISettingRepository
 {
     private const string _placeholder = "none";
 
     private readonly string _directory = configuration["Slack:InstallationStoreLocation"] ??
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SlackBotManager", ".setting");
 
-    public Setting? FindSetting(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
+    public Setting? Find(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
         teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;

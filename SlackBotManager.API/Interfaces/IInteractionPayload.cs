@@ -9,4 +9,8 @@ namespace SlackBotManager.API.Interfaces;
 [JsonDerivedType(typeof(ViewClosedPayload), typeDiscriminator: "view_closed")]
 public interface IInteractionPayload
 {
+    public Enterprise? Enterprise { get; set; }
+    public Team? Team { get; set; }
+    public User User { get; set; }
+    public bool IsEnterpriseInstall { get; set; }
 }

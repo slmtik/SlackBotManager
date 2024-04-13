@@ -5,7 +5,7 @@ namespace SlackBotManager.API.Models.Commands;
 public class Command
 {
     [BindProperty(Name = "command")]
-    public required string CommandText { get; set; }
+    public string CommandText { get; set; }
 
     [BindProperty(Name = "user_id")]
     public string UserId { get; set; }

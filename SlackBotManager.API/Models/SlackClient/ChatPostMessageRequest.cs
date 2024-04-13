@@ -13,7 +13,7 @@ public class ChatPostMessageRequest
     public bool? UnfurlLinks { get; set; }
     public Metadata? Metadata { get; set; }
     [JsonPropertyName("thread_ts")]
-    public string? ThreadTimeStampId { get; set; }
+    public string? ThreadTimestamp { get; set; }
 
     public ChatPostMessageRequest(string channelId, string text)
     {

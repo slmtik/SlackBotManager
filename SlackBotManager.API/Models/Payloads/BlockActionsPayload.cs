@@ -8,10 +8,9 @@ public class BlockActionsPayload : IInteractionPayload
     public required string TriggerId { get; set; }
     public View View { get; set; }
     public Message? Message { get; set; }
-    public User User { get; set; }
     public Channel? Channel { get; set; }
-    public Team? Team { get; set; }
     public Enterprise? Enterprise { get; set; }
+    public Team? Team { get; set; }
+    public User User { get; set; }
     public bool IsEnterpriseInstall { get; set; }
-
 }

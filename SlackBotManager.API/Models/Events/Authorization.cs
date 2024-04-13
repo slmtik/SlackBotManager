@@ -11,4 +11,6 @@ public class Authorization
     public bool IsEnterpriseInstall { get; set; }
     [JsonPropertyName("team_id")]
     public string? TeamId { get; set; }
+    [JsonPropertyName("user_id")]
+    public string? UserId { get; set; }
 }

@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.API.Models.Stores;
+﻿namespace SlackBotManager.API.Models.Repositories;
 
 public class Setting
 {
@@ -7,4 +7,5 @@ public class Setting
     public string? TeamId { get; set; }
     public string? CreatePullRequestChannelId { get; set; }
     public string[]? ApplicationAdminUsers { get; set; }
+    public PullRequestReview? CurrentPullRequestReview { get; set; }
 }

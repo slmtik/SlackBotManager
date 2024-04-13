@@ -1,6 +1,6 @@
 ﻿using SlackBotManager.API.Core;
 using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.Stores;
+using SlackBotManager.API.Models.Repositories;
 using SlackBotManager.API.Services;
 using System.Net;
 using System.Text.Json.Nodes;
@@ -11,7 +11,7 @@ public class SlackTokenRotator(RequestDelegate next)
 {
     private readonly RequestDelegate _next = next;
 
-    public async Task InvokeAsync(HttpContext context, IInstallationStore installationStore, SlackClient slackClient)
+    public async Task InvokeAsync(HttpContext context, IInstallationRepository installationStore, SlackClient slackClient)
     {
         context.Request.EnableBuffering();
         string rawBody = await context.Request.BodyReader.GetStringFromPipe();
@@ -75,13 +75,13 @@ public class SlackTokenRotator(RequestDelegate next)
         return (teamId, enterpriseId, isEnterpriseInstall, challenge);
     }
 
-    private static async Task RotateToken(IInstallationStore installationStore,
+    private static async Task RotateToken(IInstallationRepository installationStore,
                                    SlackClient slackClient,
                                    string? teamId,
                                    string? enterpriseId,
                                    bool? isEnterpriseInstall)
     {
-        var installation = installationStore.FindInstallation(enterpriseId, teamId, null, isEnterpriseInstall);
+        var installation = installationStore.Find(enterpriseId, teamId, null, isEnterpriseInstall);
 
         if (installation != null)
         {

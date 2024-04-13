@@ -81,9 +81,9 @@ public class SlackClient(HttpClient httpClient,
         return ApiCall(new(HttpMethod.Post, "chat.update") { Content = content });
     }
 
-    public Task<IRequestResult> ChatDeleteMessage(string channel, string timestampId)
+    public Task<IRequestResult> ChatDeleteMessage(string channel, string timestamp)
     {
-        var body = JsonSerializer.Serialize(new { channel, ts = timestampId }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { channel, ts = timestamp }, SlackJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "chat.delete") { Content = content });
     }

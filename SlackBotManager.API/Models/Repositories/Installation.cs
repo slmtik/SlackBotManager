@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.API.Models.Stores;
+﻿namespace SlackBotManager.API.Models.Repositories;
 
 public class Installation
 {

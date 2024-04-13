@@ -13,19 +13,19 @@ public class ChaUpdateMessageRequest
     public bool? UnfurlLinks { get; set; }
     public Metadata? Metadata { get; set; }
     [JsonPropertyName("ts")]
-    public string TimestampId { get; set; }
+    public string Timestamp { get; set; }
 
-    public ChaUpdateMessageRequest(string channelId, string timestampId, string text)
+    public ChaUpdateMessageRequest(string channelId, string timestamp, string text)
     {
         ChannelId = channelId;
-        TimestampId = timestampId;
+        Timestamp = timestamp;
         Text = text;
     }
 
-    public ChaUpdateMessageRequest(string channelId, string timestampId, IEnumerable<IBlock> blocks)
+    public ChaUpdateMessageRequest(string channelId, string timestamp, IEnumerable<IBlock> blocks)
     {
         ChannelId = channelId;
-        TimestampId = timestampId;
+        Timestamp = timestamp;
         Blocks = blocks;
     }
 }

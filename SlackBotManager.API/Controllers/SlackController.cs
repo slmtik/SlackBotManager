@@ -1,10 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.Models.Events;
-using SlackBotManager.API.Models.Stores;
+using SlackBotManager.API.Models.Repositories;
 using SlackBotManager.API.Services;
 using SlackBotManager.API.Models.Commands;
-using SlackBotManager.API.Models.Core;
 
 namespace SlackBotManager.API.Controllers;
 
@@ -14,7 +13,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
                              IOAuthStateStore oAuthStateStore,
                              AuthorizationUrlGenerator authorizationUrlGenerator,
                              SlackClient slackClient,
-                             IInstallationStore installationStore,
+                             IInstallationRepository installationStore,
                              IHostEnvironment hostEnvironment) : ControllerBase
 {
     private const string _routeToOAuthStart = "/api/slack/install";
@@ -23,7 +22,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
     private readonly IOAuthStateStore _oAuthStateStore = oAuthStateStore;
     private readonly AuthorizationUrlGenerator _authorizationUrlGenerator = authorizationUrlGenerator;
     private readonly SlackClient _slackClient = slackClient;
-    private readonly IInstallationStore _installationStore = installationStore;
+    private readonly IInstallationRepository _installationStore = installationStore;
     private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
 
     [HttpPost]

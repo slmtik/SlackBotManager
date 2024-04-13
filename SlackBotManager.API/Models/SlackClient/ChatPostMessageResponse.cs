@@ -5,5 +5,5 @@ namespace SlackBotManager.API.Models.SlackClient;
 public class ChatPostMessageResponse : BaseResponse
 {
     [JsonPropertyName("ts")]
-    public string TimeStampId { get; set; }
+    public string Timestamp { get; set; }
 }

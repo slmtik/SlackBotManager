@@ -16,8 +16,8 @@ builder.Services.AddHttpClient<SlackClient>((client) =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddScoped<IOAuthStateStore, FileOAuthStateStore>();
-builder.Services.AddScoped<IInstallationStore, FileInstallationStore>();
-builder.Services.AddScoped<ISettingStore, FileSettingStore>();
+builder.Services.AddScoped<IInstallationRepository, FileInstallationRepository>();
+builder.Services.AddScoped<ISettingRepository, FileSettingRepository>();
 builder.Services.AddTransient<AuthorizationUrlGenerator>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CreatePullRequestInvocation>();

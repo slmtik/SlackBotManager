@@ -1,10 +1,10 @@
 ﻿using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.Stores;
+using SlackBotManager.API.Models.Repositories;
 using System.Text.Json;
 
 namespace SlackBotManager.API.Services;
 
-public class FileInstallationStore(IConfiguration configuration) : IInstallationStore
+public class FileInstallationRepository(IConfiguration configuration) : IInstallationRepository
 {
     private const string _placeholder = "none";
 
@@ -28,7 +28,7 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
         return bot;
     }
 
-    public Installation? FindInstallation(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
+    public Installation? Find(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
         teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;
@@ -51,7 +51,7 @@ public class FileInstallationStore(IConfiguration configuration) : IInstallation
 
         if (installation != null && userId != null)
         {
-            Installation? latestBotInstallation = FindInstallation(enterpriseId, teamId, null, isEnterpriseInstall);
+            Installation? latestBotInstallation = Find(enterpriseId, teamId, null, isEnterpriseInstall);
 
             if (latestBotInstallation != null && installation.BotToken!.Equals(latestBotInstallation.BotToken))
             {
