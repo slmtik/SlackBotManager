@@ -6,19 +6,21 @@ using SlackBotManager.API.Models.ElementStates;
 using SlackBotManager.API.Models.Events;
 using SlackBotManager.API.Models.Payloads;
 using SlackBotManager.API.Models.Repositories;
+using SlackBotManager.API.Models.Surfaces;
 using SlackBotManager.API.Models.Views;
 
 namespace SlackBotManager.API.Services;
 
-public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
+public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IViewSubmissionInvocation
 {
-    private readonly ISettingRepository _settingStore;
+    private readonly ISettingRepository _settingRepository;
     private readonly CreatePullRequestInvocation _createPullRequestInvocation;
 
     public Dictionary<string, Func<SlackClient, EventPayload, Task>> EventBindings { get; } = [];
     public Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task>> BlockActionsBindings { get; } = [];
+    public Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task>> ViewSubmissionBindings { get; } = [];
 
-    public HomeTabInvocation(ISettingRepository settingStore, CreatePullRequestInvocation createPullRequestInvocation)
+    public HomeTabInvocation(ISettingRepository settingRepository, CreatePullRequestInvocation createPullRequestInvocation)
     {
         EventBindings.Add("app_home_opened", SendHomeTab);
 
@@ -26,22 +28,27 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
         BlockActionsBindings.Add(("app_admins", "select"), SetApplicationAdmins);
         BlockActionsBindings.Add(("pull_request", "create"), CreatePullRequest);
         BlockActionsBindings.Add(("creation_message", "remove"), RemoveCreationMessage);
+        BlockActionsBindings.Add(("branches", "edit"), EditBranches);
+        BlockActionsBindings.Add(("tags", "edit"), EditTags);
 
-        _settingStore = settingStore;
+        ViewSubmissionBindings.Add("edit_branches", SubmitEditBranches);
+        ViewSubmissionBindings.Add("edit_tags", SubmitEditTags);
+
+        _settingRepository = settingRepository;
         _createPullRequestInvocation = createPullRequestInvocation;
     }
 
-    private async Task SendHomeTab(SlackClient slackClient, EventPayload eventPayload)
+    private async Task SendHomeTab(SlackClient slackClient, EventPayload payload)
     {
-        var authorization = eventPayload.Authorizations!.First();
-        var setting = _settingStore.Find(authorization.EnterpriseId, authorization.TeamId, authorization.UserId, authorization.IsEnterpriseInstall);
-        await slackClient.ViewPublish(eventPayload.Event!.User!, await BuildHomeView(slackClient, eventPayload.Event!.User!, setting));
+        var authorization = payload.Authorizations.First();
+        var setting = await _settingRepository.Find(authorization.EnterpriseId, authorization.TeamId, authorization.UserId, authorization.IsEnterpriseInstall);
+        await slackClient.ViewPublish(payload.Event.User!, await BuildHomeView(slackClient, payload.Event.User!, setting));
     }
 
     private static async Task<HomeView> BuildHomeView(SlackClient slackClient,
-                                               string userId,
-                                               Setting? setting,
-                                               params (string BlockId, string Message)[] validationMessages)
+                                                      string userId,
+                                                      Setting? setting,
+                                                      params (string BlockId, string Message)[] validationMessages)
     {
         var userInfoResult = await slackClient.UserInfo(userId);
 
@@ -78,7 +85,7 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
                         Placeholder = new("Select application admins"),
                         ActionId = "select",
                         InitialConversations = setting?.ApplicationAdminUsers,
-                        Filter = new() { ConversationTypes = [ConversationType.DirectMessages], ExcludeBotUsers = true }
+                        Filter = new() { Include = [Filter.ConversationType.DirectMessages], ExcludeBotUsers = true }
                     }
                 },                
             ]);
@@ -99,6 +106,27 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
                     },
                 ]);
             }
+
+            blocks.AddRange(
+            [
+                new DividerBlock(),
+                new SectionBlock(new MarkdownText($"Branches: {string.Join(", ", setting.Branches.Select(b => $"`{b}`"))}"))
+                {
+                    BlockId = "branches",
+                    Accessory = new Button("Edit branches")
+                    {
+                        ActionId = "edit"
+                    }
+                },
+                new SectionBlock(new MarkdownText($"Tags: {string.Join(", ", setting.Tags.Select(b => $"`{b}`"))}"))
+                {
+                    BlockId = "tags",
+                    Accessory = new Button("Edit tags")
+                    {
+                        ActionId = "edit"
+                    }
+                },
+            ]);
         }
 
         if (validationMessages != null)
@@ -117,24 +145,25 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
     {
         var command = new Command()
         {
+            CommandText = "/create_pull_request",
             EnterpriseId = payload.Enterprise?.Id,
             TeamId = payload.Team?.Id,
             IsEnterpriseInstall = payload.IsEnterpriseInstall,
             UserId = payload.User.Id,
             TriggerId = payload.TriggerId
         };
-        var result = await _createPullRequestInvocation.CommandBindings["/create_pull_request"].Invoke(slackClient, command);
+        var result = await _createPullRequestInvocation.CommandBindings[command.CommandText].Invoke(slackClient, command);
 
         if (!result.IsSuccesful)
         {
-            var setting = _settingStore.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+            var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
             await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting, ("pull_request", result.Error!)));
         }
     }
 
     private async Task SetChannelToPost(SlackClient slackClient, BlockActionsPayload payload)
     {
-        var setting = _settingStore.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall) ??
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall) ??
             new Setting()
             {
                 EnterpriseId = payload.Enterprise?.Id,
@@ -143,15 +172,15 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
             };
 
         setting.CreatePullRequestChannelId = ((SelectPublicChannelState)payload.View.State.Values["channel_to_post"]["select"]).SelectedChannel;
-        _settingStore.Save(setting);
+        await _settingRepository.Save(setting);
 
-        if (payload.View!.Blocks!.Any(b => b.BlockId!.StartsWith("validation")))
+        if (payload.View.Blocks.Any(b => b.BlockId.StartsWith("validation")))
             await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting));
     }
 
     private async Task SetApplicationAdmins(SlackClient slackClient, BlockActionsPayload payload)
     {
-        var setting = _settingStore.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall) ??
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall) ??
             new Setting()
             {
                 EnterpriseId = payload.Enterprise?.Id,
@@ -160,22 +189,85 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation
             };
 
         setting.ApplicationAdminUsers = ((MultiSelectConversationsState)payload.View.State.Values["app_admins"]["select"]).SelectedConversations;
-        _settingStore.Save(setting);
+        await _settingRepository.Save(setting);
 
-        if (payload.View!.Blocks!.Any(b => b.BlockId!.StartsWith("validation")))
+        if (payload.View.Blocks.Any(b => b.BlockId.StartsWith("validation")))
             await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting));
     }
 
     private async Task RemoveCreationMessage(SlackClient slackClient, BlockActionsPayload payload)
     {
-        var setting = _settingStore.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
 
         if (!string.IsNullOrEmpty(setting?.CurrentPullRequestReview?.MessageTimestamp))
         {
             await slackClient.ChatDeleteMessage(setting.CreatePullRequestChannelId!, setting.CurrentPullRequestReview.MessageTimestamp);
             setting.CurrentPullRequestReview = null;
-            _settingStore.Save(setting);
+            await _settingRepository.Save(setting);
         }
     }
 
+    private async Task EditBranches(SlackClient slackClient, BlockActionsPayload payload)
+    {
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+
+        IEnumerable<IBlock> blocks =
+        [
+            new InputBlock("List of branches separated by space", new PlainTextInput() { ActionId = "input", InitialValue = string.Join(" ", setting.Branches)})
+            {
+                BlockId = "branches"
+            }
+        ];
+
+        var editBranchesModal = new ModalView("Edit branches", blocks) { Submit = new("Save"), CallbackId = "edit_branches" };
+        await slackClient.ViewOpen(payload.TriggerId, editBranchesModal);
+    }
+
+    private async Task SubmitEditBranches(SlackClient slackClient, ViewSubmissionPayload payload)
+    {
+        if (payload.View.State.Values["branches"]["input"] is PlainTextInputState plainTextInputState)
+        {
+            var branches = plainTextInputState.Value.Split(' ').Distinct();
+            var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+
+            if (branches.Count() != setting.Branches.Count() || branches.Intersect(setting.Branches).Count() != setting.Branches.Count())
+            {
+                setting.Branches = branches;
+                await _settingRepository.Save(setting);
+                await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting));
+            }
+        }
+    }
+
+    private async Task EditTags(SlackClient slackClient, BlockActionsPayload payload)
+    {
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+
+        IEnumerable<IBlock> blocks =
+        [
+            new InputBlock("List of tags separated by space", new PlainTextInput() { ActionId = "input", InitialValue = string.Join(" ", setting.Tags)})
+            {
+                BlockId = "tags"
+            }
+        ];
+
+        var editBranchesModal = new ModalView("Edit tags", blocks) { Submit = new("Save"), CallbackId = "edit_tags" };
+        await slackClient.ViewOpen(payload.TriggerId, editBranchesModal);
+    }
+
+    private async Task SubmitEditTags(SlackClient slackClient, ViewSubmissionPayload payload)
+    {
+        if (payload.View.State.Values["tags"]["input"] is PlainTextInputState plainTextInputState)
+        {
+            var tags = plainTextInputState.Value.Split(' ').Distinct();
+            var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+
+            if (tags.Count() != setting.Tags.Count() || tags.Intersect(setting.Tags).Count() != setting.Tags.Count())
+            {
+                setting.Tags = tags;
+                await _settingRepository.Save(setting);
+                await slackClient.ViewPublish(payload.User.Id, await BuildHomeView(slackClient, payload.User.Id, setting));
+            }
+        }
+    }
 }

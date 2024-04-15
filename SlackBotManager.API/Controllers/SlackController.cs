@@ -124,7 +124,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
                 IsEnterpriseInstall = oAuthData.IsEnterpriseInstall,
                 TokenType = oAuthData.TokenType
             };
-            _installationStore.Save(installation);
+            await _installationStore.Save(installation);
             return base.Content(RenderSuccessPage(installation.AppId, installation.TeamId, installation.IsEnterpriseInstall, installation.EnterpriseUrl),
                                 "text/html");
 

@@ -2,9 +2,9 @@
 using System.IO.Pipelines;
 using System.Text;
 
-namespace SlackBotManager.API.Core
+namespace SlackBotManager.API.Extensions
 {
-    public static class Extensions
+    public static class PipeReaderExtensions
     {
         public static async Task<string> GetStringFromPipe(this PipeReader pipeReader)
         {

@@ -8,5 +8,4 @@ public class MultiStaticSelect(IEnumerable<Option<PlainText>> options) : IElemen
     public IEnumerable<Option<PlainText>>? InitialOptions { get; set; }
     public int? MaxSelectedItems { get; set; }
     public string? ActionId { get; set; }
-
 }

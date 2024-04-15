@@ -1,4 +1,4 @@
-﻿using SlackBotManager.API.Core;
+﻿using SlackBotManager.API.Extensions;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;

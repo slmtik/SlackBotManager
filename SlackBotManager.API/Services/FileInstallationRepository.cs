@@ -11,7 +11,7 @@ public class FileInstallationRepository(IConfiguration configuration) : IInstall
     private readonly string _directory = configuration["Slack:InstallationStoreLocation"] ??
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SlackBotManager", ".installation");
 
-    public Bot? FindBot(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
+    public async Task<Bot?> FindBot(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
         teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;
@@ -22,13 +22,11 @@ public class FileInstallationRepository(IConfiguration configuration) : IInstall
             return bot;
 
         using var reader = new StreamReader(botFilePath);
-        var content = reader.ReadToEnd();
-        bot = JsonSerializer.Deserialize<Bot>(content);
-
-        return bot;
+        var content = await reader.ReadToEndAsync();
+        return JsonSerializer.Deserialize<Bot>(content);
     }
 
-    public Installation? Find(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
+    public async Task<Installation?> Find(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
         teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;
@@ -45,15 +43,15 @@ public class FileInstallationRepository(IConfiguration configuration) : IInstall
 
         using (var reader = new StreamReader(instalationFilePath))
         {
-            var content = reader.ReadToEnd();
+            var content = await reader.ReadToEndAsync();
             installation = JsonSerializer.Deserialize<Installation>(content);
         }
 
         if (installation != null && userId != null)
         {
-            Installation? latestBotInstallation = Find(enterpriseId, teamId, null, isEnterpriseInstall);
+            Installation? latestBotInstallation = await Find(enterpriseId, teamId, null, isEnterpriseInstall);
 
-            if (latestBotInstallation != null && installation.BotToken!.Equals(latestBotInstallation.BotToken))
+            if (latestBotInstallation != null && installation.BotToken.Equals(latestBotInstallation.BotToken))
             {
                 installation.BotId = latestBotInstallation.BotId;
                 installation.BotRefreshToken = latestBotInstallation.BotRefreshToken;
@@ -67,7 +65,7 @@ public class FileInstallationRepository(IConfiguration configuration) : IInstall
         return installation;
     }
 
-    public void Save(Installation installation)
+    public async Task Save(Installation installation)
     {
         var enterpriseId = installation.EnterpriseId ?? _placeholder;
         var teamId = installation.TeamId ?? _placeholder;
@@ -82,14 +80,14 @@ public class FileInstallationRepository(IConfiguration configuration) : IInstall
         using (var writer = new StreamWriter(installerFilePath))
         {
             var content = JsonSerializer.Serialize(installation);
-            writer.Write(content);
+            await writer.WriteAsync(content);
         }
 
         installerFilePath = Path.Combine(teamInstallationDir, $"installer-{userId}-latest");
         using (var writer = new StreamWriter(installerFilePath))
         {
             var content = JsonSerializer.Serialize(installation);
-            writer.Write(content);
+            await writer.WriteAsync(content);
         }
     }
 

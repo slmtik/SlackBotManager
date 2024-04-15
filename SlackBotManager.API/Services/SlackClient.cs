@@ -42,7 +42,7 @@ public class SlackClient(HttpClient httpClient,
 
     private async Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse 
     {
-        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext!.Items["bot-token"]!.ToString());
+        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext.Items["bot-token"].ToString());
 
         var responseMessage = await _httpClient.SendAsync(request);
         responseMessage.EnsureSuccessStatusCode();

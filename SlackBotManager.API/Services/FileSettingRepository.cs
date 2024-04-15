@@ -11,7 +11,7 @@ public class FileSettingRepository(IConfiguration configuration) : ISettingRepos
     private readonly string _directory = configuration["Slack:InstallationStoreLocation"] ??
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SlackBotManager", ".setting");
 
-    public Setting? Find(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
+    public async Task<Setting?> Find(string? enterpriseId, string? teamId, string? userId, bool? isEnterpriseInstall)
     {
         enterpriseId ??= _placeholder;
         teamId = teamId is null || (isEnterpriseInstall ?? false) ? _placeholder : teamId;
@@ -22,16 +22,12 @@ public class FileSettingRepository(IConfiguration configuration) : ISettingRepos
         if (!File.Exists(settingFilePath))
             return setting;
 
-        using (var reader = new StreamReader(settingFilePath))
-        {
-            var content = reader.ReadToEnd();
-            setting = JsonSerializer.Deserialize<Setting>(content);
-        }
-
-        return setting;
+        using var reader = new StreamReader(settingFilePath);
+        var content = await reader.ReadToEndAsync();
+        return JsonSerializer.Deserialize<Setting>(content);
     }
 
-    public void Save(Setting setting)
+    public async Task Save(Setting setting)
     {
         var enterpriseId = setting.EnterpriseId ?? _placeholder;
         var teamId = setting.TeamId ?? _placeholder;
@@ -42,6 +38,6 @@ public class FileSettingRepository(IConfiguration configuration) : ISettingRepos
         var installerFilePath = Path.Combine(settingFilePath, $"setting-latest");
         using var writer = new StreamWriter(installerFilePath);
         var content = JsonSerializer.Serialize(setting);
-        writer.Write(content);
+        await writer.WriteAsync(content);
     }
 }

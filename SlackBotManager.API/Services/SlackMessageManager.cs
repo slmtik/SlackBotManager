@@ -79,16 +79,26 @@ public class SlackMessageManager
         return Task.CompletedTask;
     }
 
-    public Task HandleEventPayload(EventPayload eventPayload)
+    public Task HandleEventPayload(EventPayload payload)
     {
-        return _events[eventPayload.Event!.Type!].Invoke(_slackClient, eventPayload);
+        return _events[payload.Event.Type].Invoke(_slackClient, payload);
     }
 
-    private Task HandleViewSubmissionPayload(ViewSubmissionPayload viewSubmissionPayload) =>
-        _viewSubmissionInteractions[viewSubmissionPayload.View.CallbackId].Invoke(_slackClient, viewSubmissionPayload);
+    private Task HandleViewSubmissionPayload(ViewSubmissionPayload payload)
+    {
+        if (_viewSubmissionInteractions.TryGetValue(payload.View.CallbackId, out var bloackActionsInteractionHandler))
+            return bloackActionsInteractionHandler.Invoke(_slackClient, payload);
 
-    private Task HandleViewClosedPayload(ViewClosedPayload viewClosedPayload) =>
-        _viewClosedInteractions[viewClosedPayload.View.CallbackId].Invoke(_slackClient, viewClosedPayload);
+        _logger.LogWarning("The requested view submission interaction is not handled yet. " +
+                           "(ViewType: {ViewType}, ViewCallbackId: {CallbackId})",
+                           payload.View.Type,
+                           payload.View.CallbackId);
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleViewClosedPayload(ViewClosedPayload payload) =>
+        _viewClosedInteractions[payload.View.CallbackId].Invoke(_slackClient, payload);
 
     private Task HandleBlockActionsPayload(BlockActionsPayload payload)
     {

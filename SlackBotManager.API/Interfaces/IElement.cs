@@ -15,6 +15,7 @@ namespace SlackBotManager.API.Interfaces
     [JsonDerivedType(typeof(SelectUser), typeDiscriminator: "users_select")]
     [JsonDerivedType(typeof(MultiSelectUser), typeDiscriminator: "multi_users_select")]
     [JsonDerivedType(typeof(MultiSelectConversations), typeDiscriminator: "multi_conversations_select")]
+    [JsonDerivedType(typeof(PlainTextInput), typeDiscriminator: "plain_text_input")]
     public interface IElement
     {
     }

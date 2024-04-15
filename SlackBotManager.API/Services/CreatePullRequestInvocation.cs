@@ -5,7 +5,6 @@ using SlackBotManager.API.Models.Core;
 using SlackBotManager.API.Models.Elements;
 using SlackBotManager.API.Models.ElementStates;
 using SlackBotManager.API.Models.Payloads;
-using SlackBotManager.API.Models.Repositories;
 using SlackBotManager.API.Models.SlackClient;
 using SlackBotManager.API.Models.Surfaces;
 using System.Text.Json;
@@ -47,8 +46,8 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
 
         public static explicit operator MessageMetadata(JsonObject json)
         {
-            return new MessageMetadata(json["pull_request_author"]!.ToString(),
-                                       json["branches"].Deserialize<IEnumerable<string>>()!)
+            return new MessageMetadata(json["pull_request_author"].ToString(),
+                                       json["branches"].Deserialize<IEnumerable<string>>())
             { 
                 Reviewing = json["reviewing"].Deserialize<List<string>>(),
                 Approved = json["approved"].Deserialize<List<string>>(),
@@ -57,7 +56,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         }
     }
 
-    private readonly ISettingRepository _settingStore;
+    private readonly ISettingRepository _settingRepository;
 
     private enum PullRequestStatus
     {
@@ -72,7 +71,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
     public Dictionary<string, Func<SlackClient, ViewClosedPayload, Task>> ViewClosedBindings { get; } = [];
     public Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task>> BlockActionsBindings { get; } = [];
 
-    public CreatePullRequestInvocation(ISettingRepository settingStore)
+    public CreatePullRequestInvocation(ISettingRepository settingRepository)
     {
         CommandBindings.Add("/create_pull_request", ShowCreatePullRequestView);
 
@@ -86,24 +85,28 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         BlockActionsBindings.Add(("pull_request_status", "approve"), UpdatePullRequestStatus);
         BlockActionsBindings.Add(("pull_request_status", "merge"), FinishPullRequest);
         BlockActionsBindings.Add(("pull_request_status", "close"), FinishPullRequest);
-        _settingStore = settingStore;
+        _settingRepository = settingRepository;
     }
 
     private async Task<IRequestResult> ShowCreatePullRequestView(SlackClient slackClient, Command commandRequest)
     {
-        var setting = _settingStore.Find(commandRequest.EnterpriseId, commandRequest.TeamId, commandRequest.UserId, commandRequest.IsEnterpriseInstall);
-  
+        var setting = await _settingRepository.Find(commandRequest.EnterpriseId, commandRequest.TeamId, commandRequest.UserId, commandRequest.IsEnterpriseInstall);
+
         if (string.IsNullOrEmpty(setting?.CreatePullRequestChannelId))
             return RequestResult.Failure("Please set the *Channel to post Messages* setting");
 
         if (!string.IsNullOrWhiteSpace(setting.CurrentPullRequestReview?.AuthorId) && !setting.CurrentPullRequestReview.AuthorId.Equals(commandRequest.UserId))
-            return RequestResult.Failure("There is already a pull request in the creation progress. Please wait");
+            return RequestResult.Failure("There is already a pull request in the creation progress");
 
         string? creationMessageTimestamp = setting.CurrentPullRequestReview?.MessageTimestamp;
         if (string.IsNullOrEmpty(creationMessageTimestamp))
         {
             var userInfoResult = await slackClient.UserInfo(commandRequest.UserId);
-            string message = $"{userInfoResult.Value!.User!.Profile!.DisplayName} is creating a new pull request";
+
+            if (!userInfoResult.IsSuccesful)
+                return RequestResult.Failure("Failed to get user info. Please check logs");
+
+            string message = $"{userInfoResult.Value!.User.Profile.DisplayName} is creating a new pull request";
             var postMessageResult = await slackClient.ChatPostMessage(new(setting?.CreatePullRequestChannelId!, message));
             if (!postMessageResult.IsSuccesful)
                 return postMessageResult.Error switch
@@ -114,19 +117,17 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
             creationMessageTimestamp = postMessageResult.Value!.Timestamp;
         }
 
-        setting.CurrentPullRequestReview = new() { AuthorId = commandRequest.UserId, MessageTimestamp = creationMessageTimestamp };
-        _settingStore.Save(setting);
+        setting!.CurrentPullRequestReview = new() { AuthorId = commandRequest.UserId, MessageTimestamp = creationMessageTimestamp };
+        await _settingRepository.Save(setting);
 
-        var viewMetadata = new ViewMetadata(setting?.CreatePullRequestChannelId!, creationMessageTimestamp) { Branches = ["develop"], IssuesNumber = 1 };
-        await slackClient.ViewOpen(commandRequest.TriggerId, BuildCreatePullRequestModal(viewMetadata));
+        var viewMetadata = new ViewMetadata(setting?.CreatePullRequestChannelId!, creationMessageTimestamp) { Branches = [setting!.Branches.First()], IssuesNumber = 1 };
+        await slackClient.ViewOpen(commandRequest.TriggerId, BuildCreatePullRequestModal(viewMetadata, setting.Tags));
         
         return RequestResult.Success();
     }
 
-    private static ModalView BuildCreatePullRequestModal(ViewMetadata viewMetadata)
+    private static ModalView BuildCreatePullRequestModal(ViewMetadata viewMetadata, IEnumerable<string> tags)
     {
-        IEnumerable<Option<PlainText>> tags = [new(new("#usefull"), "#usefull"), new(new("#easy"), "#easy")];
-
         List<IBlock> blockList = [];
 
         for (int i = 0; i < viewMetadata.Branches.Count(); i++)
@@ -135,7 +136,11 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         for (int i = 0; i < viewMetadata.IssuesNumber; i++)
             blockList.Add(new InputBlock("Issue Link", new UrlInput() { ActionId = "url_input" }) { BlockId = $"issue_tracker_{i}" });
 
-        blockList.Add(new InputBlock("Tags", new MultiStaticSelect(tags) { ActionId = "select" }) { BlockId = "tags", Optional = true });
+        blockList.Add(new InputBlock("Tags", new MultiStaticSelect(tags.Select(t => new Option<PlainText>(new(t), t))) { ActionId = "select" }) 
+        { 
+            BlockId = "tags", 
+            Optional = true 
+        });
         blockList.Add(new SectionBlock("Click to set branches or change number of issues")
         {
             Accessory = new Button("Manage details") { ActionId = "change" },
@@ -234,28 +239,29 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
             }
         });
 
-        var setting = _settingStore.Find(viewSubmissionPayload.Enterprise?.Id,
-                                         viewSubmissionPayload.Team?.Id,
-                                         viewSubmissionPayload.User.Id,
-                                         viewSubmissionPayload.IsEnterpriseInstall);
+        var setting = await _settingRepository.Find(viewSubmissionPayload.Enterprise?.Id,
+                                               viewSubmissionPayload.Team?.Id,
+                                               viewSubmissionPayload.User.Id,
+                                               viewSubmissionPayload.IsEnterpriseInstall);
         setting.CurrentPullRequestReview = null;
-        _settingStore.Save(setting);
+        await _settingRepository.Save(setting);
     }
 
-    private Task SubmitManageDetailsView(SlackClient slackClient, ViewSubmissionPayload viewSubmissionPayload)
+    private async Task SubmitManageDetailsView(SlackClient slackClient, ViewSubmissionPayload payload)
     {
-        ViewMetadata viewMetadata = JsonSerializer.Deserialize<ViewMetadata>(viewSubmissionPayload.View.PrivateMetadata)!;
+        ViewMetadata viewMetadata = JsonSerializer.Deserialize<ViewMetadata>(payload.View.PrivateMetadata)!;
 
-        if (viewSubmissionPayload.View.State.Values["branches"]["multi_static_select"] is MultiStaticSelectState multiStaticSelectState)
-            viewMetadata.Branches = multiStaticSelectState.SelectedOptions!.Select(so => so.Value).ToList();
+        if (payload.View.State.Values["branches"]["multi_static_select"] is MultiStaticSelectState multiStaticSelectState)
+            viewMetadata.Branches = (multiStaticSelectState.SelectedOptions ?? []).Select(so => so.Value).ToList();
 
-        if (viewSubmissionPayload.View.State.Values["issues"]["number_input"] is NumberInputState numberInputState)
+        if (payload.View.State.Values["issues"]["number_input"] is NumberInputState numberInputState)
             viewMetadata.IssuesNumber = int.Parse(numberInputState.Value);
 
-        var viewToCreatePullRequest = BuildCreatePullRequestModal(viewMetadata);
-        var viewId = viewSubmissionPayload.View.RootViewId;
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+        var viewToCreatePullRequest = BuildCreatePullRequestModal(viewMetadata, setting.Tags);
+        var viewId = payload.View.RootViewId;
 
-        return slackClient.ViewUpdate(viewId, viewToCreatePullRequest);
+        await slackClient.ViewUpdate(viewId, viewToCreatePullRequest);
     }
 
     private async Task CloseCreatePullRequestView(SlackClient slackClient, ViewClosedPayload viewClosedPayload)
@@ -263,39 +269,42 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         ViewMetadata viewMetadata = JsonSerializer.Deserialize<ViewMetadata>(viewClosedPayload.View.PrivateMetadata)!;
         await slackClient.ChatDeleteMessage(viewMetadata.ChannelId, viewMetadata.Timestamp);
         
-        var setting = _settingStore.Find(viewClosedPayload.Enterprise?.Id,
-                                         viewClosedPayload.Team?.Id,
-                                         viewClosedPayload.User.Id,
-                                         viewClosedPayload.IsEnterpriseInstall);
+        var setting = await _settingRepository.Find(viewClosedPayload.Enterprise?.Id,
+                                               viewClosedPayload.Team?.Id,
+                                               viewClosedPayload.User.Id,
+                                               viewClosedPayload.IsEnterpriseInstall);
         setting.CurrentPullRequestReview = null;
-        _settingStore.Save(setting);
+        await _settingRepository.Save(setting);
     }
 
-    private Task ShowManageDetailsView(SlackClient slackClient, BlockActionsPayload payload)
+    private async Task ShowManageDetailsView(SlackClient slackClient, BlockActionsPayload payload)
     {
         ViewMetadata viewMetadata = JsonSerializer.Deserialize<ViewMetadata>(payload.View.PrivateMetadata)!;
-        return slackClient.ViewPush(payload.TriggerId, BuildManageDetailsModal(viewMetadata));
+        var setting = await _settingRepository.Find(payload.Enterprise?.Id, payload.Team?.Id, payload.User.Id, payload.IsEnterpriseInstall);
+        await slackClient.ViewPush(payload.TriggerId, BuildManageDetailsModal(viewMetadata, setting.Branches));
     }
 
-    private static ModalView BuildManageDetailsModal(ViewMetadata viewMetadata)
+    private static ModalView BuildManageDetailsModal(ViewMetadata viewMetadata, IEnumerable<string> branches)
     {
-        IEnumerable<Option<PlainText>> _branches = [new(new("develop"), "develop"), new(new("release"), "release")];
-
-        return new ModalView("Manage Details", 
+        return new ModalView("Manage Details",
         [
-            new InputBlock("Branches", new MultiStaticSelect(_branches)
-            {
-                InitialOptions = _branches.Where(b => viewMetadata.Branches.Contains(b.Value)).ToList(),
-                ActionId = "multi_static_select"
-            }) { BlockId = "branches" },
-            new InputBlock("Number of issues in pull request", new NumberInput()
-            {
-                IsDecimalAllowed = false,
-                ActionId = "number_input",
-                InitialValue = viewMetadata.IssuesNumber.ToString(),
-                MinValue = 1.ToString(),
-                MaxValue = 5.ToString()
-            }) { BlockId = "issues" }
+            new InputBlock("Branches", 
+                new MultiStaticSelect(branches.Select(b => new Option<PlainText>(new(b), b)))
+                {
+                    InitialOptions = branches.Where(b => viewMetadata.Branches.Contains(b)).Select(o => new Option<PlainText>(new(o), o)).ToList(),
+                    ActionId = "multi_static_select"
+                }) 
+            { BlockId = "branches" },
+            new InputBlock("Number of issues in pull request", 
+                new NumberInput()
+                {
+                    IsDecimalAllowed = false,
+                    ActionId = "number_input",
+                    InitialValue = viewMetadata.IssuesNumber.ToString(),
+                    MinValue = 1.ToString(),
+                    MaxValue = 5.ToString()
+                }) 
+            { BlockId = "issues" }
         ])
         {
             CallbackId = "manage_details",
@@ -310,28 +319,25 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         if (!await UpdateReviewers(slackClient, payload.Message!, pullRequestStatus, payload.User.Id))
             return;
 
-        await slackClient.ChatUpdateMessage(new(payload.Channel!.Id,
-                                                payload.Message!.Timestamp,
-                                                payload.Message.Blocks)
-        { Metadata = payload.Message.Metadata });
+        await slackClient.ChatUpdateMessage(new(payload.Channel.Id, payload.Message.Timestamp, payload.Message.Blocks) { Metadata = payload.Message.Metadata });
 
         string threadMessage;
         if (pullRequestStatus == PullRequestStatus.Review)
             threadMessage = $"<@{payload.User.Id}> started reviewing";
         else if (pullRequestStatus == PullRequestStatus.Approve)
         {
-            var displayName = ((MessageMetadata)payload.Message.Metadata!.EventPayload!).UserProfiles![payload.User.Id].DisplayName;
+            var displayName = ((MessageMetadata)payload.Message.Metadata.EventPayload!).UserProfiles![payload.User.Id].DisplayName;
             threadMessage = $"{displayName} approved the pull request";
         }
         else
             return;
 
-        await slackClient.ChatPostMessage(new(payload.Channel!.Id, threadMessage) { ThreadTimestamp = payload.Message.Timestamp });
+        await slackClient.ChatPostMessage(new(payload.Channel.Id, threadMessage) { ThreadTimestamp = payload.Message.Timestamp });
     }
 
     private async static Task<bool> UpdateReviewers(SlackClient slackClient, Message message, PullRequestStatus pullRequestStatus, string userId)
     {
-        var messageMetadata = (MessageMetadata)message.Metadata!.EventPayload!;
+        var messageMetadata = (MessageMetadata)message.Metadata.EventPayload!;
         messageMetadata.Reviewing ??= [];
         messageMetadata.Approved ??= [];
 
@@ -373,7 +379,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
 
     private async Task FinishPullRequest(SlackClient slackClient, BlockActionsPayload payload)
     {
-        var messageMetadata = (MessageMetadata)payload.Message!.Metadata!.EventPayload!;
+        var messageMetadata = (MessageMetadata)payload.Message.Metadata.EventPayload!;
         messageMetadata.Reviewing ??= [];
         
         var pullRequestStatus = (PullRequestStatus)Enum.Parse(typeof(PullRequestStatus), payload.Actions.First().ActionId, true);
@@ -408,10 +414,10 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         else
             return;
 
-        messageBlocks.Where(b => b is SectionBlock && b.BlockId == "sectionBlockOnlyMrkdwn").Cast<SectionBlock>().Single().Text!.Text = channelMessage;
+        messageBlocks.Where(b => b is SectionBlock && b.BlockId == "sectionBlockOnlyMrkdwn").Cast<SectionBlock>().Single().Text.Text = channelMessage;
         payload.Message.Blocks = messageBlocks;
 
-        await slackClient.ChatPostMessage(new(payload.Channel!.Id, threadMessage) { ThreadTimestamp = payload.Message.Timestamp });
-        await slackClient.ChatUpdateMessage(new(payload.Channel!.Id, payload.Message.Timestamp, payload.Message.Blocks) { Metadata = null });
+        await slackClient.ChatPostMessage(new(payload.Channel.Id, threadMessage) { ThreadTimestamp = payload.Message.Timestamp });
+        await slackClient.ChatUpdateMessage(new(payload.Channel.Id, payload.Message.Timestamp, payload.Message.Blocks) { Metadata = null });
     }
 }

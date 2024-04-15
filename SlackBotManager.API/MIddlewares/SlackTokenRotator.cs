@@ -1,4 +1,4 @@
-﻿using SlackBotManager.API.Core;
+﻿using SlackBotManager.API.Extensions;
 using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.Models.Repositories;
 using SlackBotManager.API.Services;
@@ -28,7 +28,7 @@ public class SlackTokenRotator(RequestDelegate next)
 
         await RotateToken(installationStore, slackClient, teamId, enterpriseId, isEnterpriseInstall);
 
-        Bot? bot = installationStore.FindBot(enterpriseId, teamId, isEnterpriseInstall);
+        Bot? bot = await installationStore.FindBot(enterpriseId, teamId, isEnterpriseInstall);
 
         if (string.IsNullOrEmpty(bot?.BotToken))
         {
@@ -56,8 +56,8 @@ public class SlackTokenRotator(RequestDelegate next)
             var json = JsonNode.Parse(body);
             if (json!["authorizations"] is JsonArray authorizations && authorizations.Count > 0)
                 jsonBody = authorizations[0]!;
-            else if (json!["type"]!.ToString() == "url_verification")
-                challenge = json["challenge"]!.ToString();
+            else if (json["type"].ToString() == "url_verification")
+                challenge = json["challenge"].ToString();
         }
         else
         {
@@ -81,13 +81,13 @@ public class SlackTokenRotator(RequestDelegate next)
                                    string? enterpriseId,
                                    bool? isEnterpriseInstall)
     {
-        var installation = installationStore.Find(enterpriseId, teamId, null, isEnterpriseInstall);
+        var installation = await installationStore.Find(enterpriseId, teamId, null, isEnterpriseInstall);
 
         if (installation != null)
         {
             Installation? updatedInstallation = await PerformTokenRotation(slackClient, installation);
             if (updatedInstallation != null)
-                installationStore.Save(updatedInstallation);
+                await installationStore.Save(updatedInstallation);
         }
     }
 
@@ -115,8 +115,10 @@ public class SlackTokenRotator(RequestDelegate next)
             return null;
 
         var oAuthResult = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = bot.BotRefreshToken });
-        var oAuthData = oAuthResult.Value;
+        if (!oAuthResult.IsSuccesful)
+            return null; 
 
+        var oAuthData = oAuthResult.Value!;
         if (oAuthData.TokenType != "bot")
             return null;
 
@@ -135,8 +137,10 @@ public class SlackTokenRotator(RequestDelegate next)
             return null;
 
         var oAuthResult = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.UserRefreshToken });
-        var oAuthData = oAuthResult.Value;
+        if (!oAuthResult.IsSuccesful)
+            return null;
 
+        var oAuthData = oAuthResult.Value!;
         if (oAuthData.TokenType != "user")
             return null;
 
