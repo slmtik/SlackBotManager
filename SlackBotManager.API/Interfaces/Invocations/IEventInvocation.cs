@@ -1,4 +1,5 @@
-﻿using SlackBotManager.API.Models.Events;
+﻿using SlackBotManager.API.Interfaces.Invocations;
+using SlackBotManager.API.Models.Events;
 using SlackBotManager.API.Services;
 
 namespace SlackBotManager.API.Interfaces;

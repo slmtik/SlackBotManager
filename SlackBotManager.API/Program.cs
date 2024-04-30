@@ -1,4 +1,6 @@
-using SlackBotManager.API.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using SlackBotManager.API.Interfaces.Invocations;
+using SlackBotManager.API.Interfaces.Stores;
 using SlackBotManager.API.MIddlewares;
 using SlackBotManager.API.Services;
 
@@ -16,13 +18,20 @@ builder.Services.AddHttpClient<SlackClient>((client) =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddScoped<IOAuthStateStore, FileOAuthStateStore>();
-builder.Services.AddScoped<IInstallationRepository, FileInstallationRepository>();
-builder.Services.AddScoped<ISettingRepository, FileSettingRepository>();
+builder.Services.AddScoped<IInstallationStore, FileInstallationStore>();
+builder.Services.AddScoped<ISettingStore, FileSettingStore>();
+builder.Services.AddScoped<IQueueStateStore, FileQueueStateStore>();
 builder.Services.AddTransient<AuthorizationUrlGenerator>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CreatePullRequestInvocation>();
-builder.Services.AddScoped<HomeTabInvocation>();
+builder.Services.AddScoped<IInvocation, CreatePullRequestInvocation>(sp => sp.GetRequiredService<CreatePullRequestInvocation>());
+builder.Services.AddScoped<IInvocation, HomeTabInvocation>(sp =>
+    new HomeTabInvocation(sp.GetRequiredService<ISettingStore>(), 
+                          sp.GetRequiredService<QueueStateManager>(),
+                          sp.GetRequiredService<CreatePullRequestInvocation>())
+);
 builder.Services.AddTransient<SlackMessageManager>();
+builder.Services.AddTransient<QueueStateManager>();
 
 var app = builder.Build();
 

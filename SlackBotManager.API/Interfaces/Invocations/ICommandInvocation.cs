@@ -1,4 +1,5 @@
-﻿using SlackBotManager.API.Models.Commands;
+﻿using SlackBotManager.API.Interfaces.Invocations;
+using SlackBotManager.API.Models.Commands;
 using SlackBotManager.API.Services;
 
 namespace SlackBotManager.API.Interfaces;

@@ -1,9 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.Models.Events;
-using SlackBotManager.API.Models.Repositories;
 using SlackBotManager.API.Services;
 using SlackBotManager.API.Models.Commands;
+using SlackBotManager.API.Interfaces.Stores;
+using System.Text.Json.Nodes;
+using SlackBotManager.API.Models.Stores;
 
 namespace SlackBotManager.API.Controllers;
 
@@ -12,8 +13,8 @@ namespace SlackBotManager.API.Controllers;
 public class SlackController(SlackMessageManager slackMessageManager,
                              IOAuthStateStore oAuthStateStore,
                              AuthorizationUrlGenerator authorizationUrlGenerator,
-                             SlackClient slackClient,
-                             IInstallationRepository installationStore,
+                             SlackClient client,
+                             IInstallationStore installationStore,
                              IHostEnvironment hostEnvironment) : ControllerBase
 {
     private const string _routeToOAuthStart = "/api/slack/install";
@@ -21,8 +22,8 @@ public class SlackController(SlackMessageManager slackMessageManager,
     private readonly SlackMessageManager _slackMessageManager = slackMessageManager;
     private readonly IOAuthStateStore _oAuthStateStore = oAuthStateStore;
     private readonly AuthorizationUrlGenerator _authorizationUrlGenerator = authorizationUrlGenerator;
-    private readonly SlackClient _slackClient = slackClient;
-    private readonly IInstallationRepository _installationStore = installationStore;
+    private readonly SlackClient _client = client;
+    private readonly IInstallationStore _installationStore = installationStore;
     private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
 
     [HttpPost]
@@ -46,7 +47,20 @@ public class SlackController(SlackMessageManager slackMessageManager,
     [Route("interactions")]
     public async Task<ActionResult> HandleInteractions([FromForm] string payload)
     {
-        await _slackMessageManager.HandleInteractionPayload(payload);
+        var requestResult = await _slackMessageManager.HandleInteractionPayload(payload);
+
+        if (!requestResult.IsSuccesful)
+        {
+            try
+            {
+                return Ok(JsonNode.Parse(requestResult.Error!));
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return Ok(requestResult.Error);
+            }
+        }
+
         return Ok();
     }
 
@@ -88,14 +102,14 @@ public class SlackController(SlackMessageManager slackMessageManager,
             if (!_oAuthStateStore.Consume(state))
                 return base.Content(RenderFailurePage("the state value is already expired"), "text/html");
 
-            var oAuthResult = await _slackClient.OAuthV2Success(new() { Code = code });
+            var oAuthResult = await _client.OAuthV2Success(new() { Code = code });
             var oAuthData = oAuthResult.Value;
 
             string? botId = null;
             string? enterpriseUrl = null;
             if (oAuthResult.IsSuccesful && !string.IsNullOrEmpty(oAuthData.AccessToken))
             {
-                var authTestResult = await _slackClient.AuthTest(oAuthData.AccessToken);
+                var authTestResult = await _client.AuthTest(oAuthData.AccessToken);
                 botId = authTestResult.Value.BotId;
 
                 if (oAuthData.IsEnterpriseInstall)
@@ -116,7 +130,6 @@ public class SlackController(SlackMessageManager slackMessageManager,
                 BotScopes = oAuthData.Scope,
                 BotRefreshToken = oAuthData.RefreshToken,
                 BotTokenExpiresIn = oAuthData.ExpiresIn,
-                UserId = oAuthData.AuthedUser?.Id,
                 UserToken = oAuthData.AuthedUser?.AccessToken,
                 UserScopes = oAuthData.AuthedUser?.Scope,
                 UserRefreshToken = oAuthData.AuthedUser?.RefreshToken,
@@ -152,10 +165,10 @@ public class SlackController(SlackMessageManager slackMessageManager,
             </html>";
     }
 
-    private static string RenderSuccessPage(string? appId, string? teamId, bool isEnterpriseInstall, string? enterpriseUrl)
+    private static string RenderSuccessPage(string? appId, string? teamId, bool? isEnterpriseInstall, string? enterpriseUrl)
     {
         string url;
-        if (isEnterpriseInstall && !string.IsNullOrEmpty(enterpriseUrl) && !string.IsNullOrEmpty(appId))
+        if (isEnterpriseInstall ?? false && !string.IsNullOrEmpty(enterpriseUrl) && !string.IsNullOrEmpty(appId))
             url = $"{enterpriseUrl}manage/organization/apps/profile/{appId}/workspaces/add";
         else if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(teamId))
             url = "slack://open";

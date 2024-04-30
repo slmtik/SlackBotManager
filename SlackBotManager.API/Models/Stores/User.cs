@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.API.Models.Repositories;
+﻿namespace SlackBotManager.API.Models.Stores;
 
 public class User
 {

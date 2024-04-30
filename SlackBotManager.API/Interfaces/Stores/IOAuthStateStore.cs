@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.API.Interfaces;
+﻿namespace SlackBotManager.API.Interfaces.Stores;
 
 public interface IOAuthStateStore
 {

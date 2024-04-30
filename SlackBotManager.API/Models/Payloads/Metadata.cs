@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Nodes;
 
-namespace SlackBotManager.API.Models.SlackClient;
+namespace SlackBotManager.API.Models.Payloads;
 
 public class Metadata
 {

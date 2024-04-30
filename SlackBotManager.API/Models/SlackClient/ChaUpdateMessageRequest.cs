@@ -1,4 +1,5 @@
 ﻿using SlackBotManager.API.Interfaces;
+using SlackBotManager.API.Models.Payloads;
 using System.Text.Json.Serialization;
 
 namespace SlackBotManager.API.Models.SlackClient;

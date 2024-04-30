@@ -22,6 +22,8 @@ public class SlackClient(HttpClient httpClient,
     private readonly string _clientId = configuration["Slack:ClientId"] ?? throw new ArgumentException("Slack ClientId is not provided");
     private readonly string _clientSecret = configuration["Slack:ClientSecret"] ?? throw new ArgumentException("Slack ClientSecret is not provided");
 
+    public const string BotTokenHttpContextKey = "bot_token";
+
     public static readonly JsonSerializerOptions SlackJsonSerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -42,7 +44,7 @@ public class SlackClient(HttpClient httpClient,
 
     private async Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse 
     {
-        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext.Items["bot-token"].ToString());
+        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
 
         var responseMessage = await _httpClient.SendAsync(request);
         responseMessage.EnsureSuccessStatusCode();

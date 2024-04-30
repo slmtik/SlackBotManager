@@ -2,7 +2,7 @@
 
 public class UserInfoResponse : BaseResponse
 {
-    public required User User { get; set; }
+    public User User { get; set; }
 }
 
 public class User

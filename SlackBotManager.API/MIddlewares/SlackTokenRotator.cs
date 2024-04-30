@@ -1,6 +1,7 @@
 ﻿using SlackBotManager.API.Extensions;
-using SlackBotManager.API.Interfaces;
-using SlackBotManager.API.Models.Repositories;
+using SlackBotManager.API.Interfaces.Stores;
+using SlackBotManager.API.Models.Core;
+using SlackBotManager.API.Models.Stores;
 using SlackBotManager.API.Services;
 using System.Net;
 using System.Text.Json.Nodes;
@@ -11,43 +12,57 @@ public class SlackTokenRotator(RequestDelegate next)
 {
     private readonly RequestDelegate _next = next;
 
-    public async Task InvokeAsync(HttpContext context, IInstallationRepository installationStore, SlackClient slackClient)
+    public async Task InvokeAsync(HttpContext context, IInstallationStore installationStore, SlackClient client)
     {
         context.Request.EnableBuffering();
         string rawBody = await context.Request.BodyReader.GetStringFromPipe();
         context.Request.Body.Position = 0;
 
-        var (teamId, enterpriseId, isEnterpriseInstall, challenge) = ParseBody(rawBody, context.Request.Headers.ContentType.ToString());
-
-        if (!string.IsNullOrEmpty(challenge))
+        if (IsChallengeRequest(rawBody, context.Request.Headers.ContentType.ToString(), out var challenge))
         {
             context.Response.StatusCode = (int)HttpStatusCode.OK;
             await context.Response.WriteAsync(challenge);
             return;
         }
 
-        await RotateToken(installationStore, slackClient, teamId, enterpriseId, isEnterpriseInstall);
-
-        Bot? bot = await installationStore.FindBot(enterpriseId, teamId, isEnterpriseInstall);
-
-        if (string.IsNullOrEmpty(bot?.BotToken))
+        var instanceData = ParseBody(rawBody, context.Request.Headers.ContentType.ToString());
+        
+        if (!await RotateToken(installationStore, client, instanceData))
         {
             context.Response.StatusCode = (int)HttpStatusCode.OK;
             await context.Response.WriteAsync("Please install this app first!");
             return;
         }
 
-        context.Items["bot-token"] = bot?.BotToken;
+        var installation = await installationStore.Find(instanceData.EnterpriseId, instanceData.TeamId, instanceData.IsEnterpriseInstall);
+
+        context.Items[SlackClient.BotTokenHttpContextKey] = installation.BotToken;
+        context.Items[InstanceData.HttpContextKey] = instanceData;
 
         await _next(context);
     }
 
-    private static (string?, string?, bool?, string?) ParseBody(string body, string contentType)
+    private static bool IsChallengeRequest(string body, string contentType, out string? challenge)
     {
-        string? teamId = null;
+        challenge = null;
+        if (contentType == "application/json" || body.StartsWith('{'))
+        {
+            var json = JsonNode.Parse(body);
+            if (json != null && json["type"]?.ToString() == "url_verification")
+            {
+                challenge = json["challenge"].ToString();
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    private static InstanceData ParseBody(string body, string contentType)
+    {
         string? enterpriseId = null;
-        bool? isEnterpriseInstall = null;
-        string? challenge = null;
+        string? teamId = null;
+        bool isEnterpriseInstall;
 
         JsonNode? jsonBody = null;
 
@@ -55,9 +70,7 @@ public class SlackTokenRotator(RequestDelegate next)
         {
             var json = JsonNode.Parse(body);
             if (json!["authorizations"] is JsonArray authorizations && authorizations.Count > 0)
-                jsonBody = authorizations[0]!;
-            else if (json["type"].ToString() == "url_verification")
-                challenge = json["challenge"].ToString();
+                jsonBody = authorizations[0];
         }
         else
         {
@@ -68,53 +81,48 @@ public class SlackTokenRotator(RequestDelegate next)
                 jsonBody = new JsonObject(formBody.Select(kvp => KeyValuePair.Create<string, JsonNode>(kvp.Key, kvp.Value.ToString()))!);
         }
 
-        teamId = (jsonBody?["team_id"] ?? jsonBody?["team"]?["id"] ?? jsonBody?["team"] ?? jsonBody?["user"]?["team_id"])?.ToString();
         enterpriseId = (jsonBody?["enterprise_id"] ?? jsonBody?["enterprise"]?["id"] ?? jsonBody?["enterprise"])?.ToString();
+        teamId = (jsonBody?["team_id"] ?? jsonBody?["team"]?["id"] ?? jsonBody?["team"] ?? jsonBody?["user"]?["team_id"])?.ToString();
         isEnterpriseInstall = Convert.ToBoolean(jsonBody?["is_enterprise_install"]?.ToString());
 
-        return (teamId, enterpriseId, isEnterpriseInstall, challenge);
+        return new(enterpriseId, teamId, isEnterpriseInstall);
     }
 
-    private static async Task RotateToken(IInstallationRepository installationStore,
-                                   SlackClient slackClient,
-                                   string? teamId,
-                                   string? enterpriseId,
-                                   bool? isEnterpriseInstall)
+    private static async Task<bool> RotateToken(IInstallationStore installationStore, SlackClient client, InstanceData instanceData)
     {
-        var installation = await installationStore.Find(enterpriseId, teamId, null, isEnterpriseInstall);
-
+        var installation = await installationStore.Find(instanceData.EnterpriseId, instanceData.TeamId, instanceData.IsEnterpriseInstall);
         if (installation != null)
         {
-            Installation? updatedInstallation = await PerformTokenRotation(slackClient, installation);
+            Installation? updatedInstallation = await PerformTokenRotation(client, installation);
             if (updatedInstallation != null)
                 await installationStore.Save(updatedInstallation);
+            return true;
         }
+        return false;
     }
 
-    private static async Task<Installation?> PerformTokenRotation(SlackClient slackClient, Installation installation, int minutesBeforeExpiration = 120)
+    private static async Task<Installation?> PerformTokenRotation(SlackClient client, Installation installation, int minutesBeforeExpiration = 120)
     {
-        Bot? rotatedBot = await PerformBotTokenRotation(slackClient, installation.ToBot(), minutesBeforeExpiration);
-        Installation? rotatedInstallation = await PerformUserTokenRotation(slackClient, installation, minutesBeforeExpiration);
+        Installation? rotatedBotToken = await PerformBotTokenRotation(client, installation, minutesBeforeExpiration);
+        Installation? rotatedUserToken = await PerformUserTokenRotation(client, installation, minutesBeforeExpiration);
 
-        if (rotatedBot != null && rotatedInstallation == null)
-        {
-            rotatedInstallation = new(installation)
+        if (rotatedBotToken != null && rotatedUserToken == null)
+            rotatedUserToken = installation with
             {
-                BotToken = rotatedBot.BotToken,
-                BotRefreshToken = rotatedBot.BotRefreshToken,
-                BotTokenExpiresAt = rotatedBot.BotTokenExpiresAt,
+                BotToken = rotatedBotToken.BotToken,
+                BotRefreshToken = rotatedBotToken.BotRefreshToken,
+                BotTokenExpiresAt = rotatedBotToken.BotTokenExpiresAt,
             };
-        }
 
-        return rotatedInstallation;
+        return rotatedUserToken;
     }
 
-    private static async Task<Bot?> PerformBotTokenRotation(SlackClient slackClient, Bot bot, int minutesBeforeExpiration)
+    private static async Task<Installation?> PerformBotTokenRotation(SlackClient client, Installation installation, int minutesBeforeExpiration)
     {
-        if (bot.BotTokenExpiresAt == null || bot.BotTokenExpiresAt > DateTimeOffset.UtcNow.ToUnixTimeSeconds() + minutesBeforeExpiration * 60)
+        if (installation.BotTokenExpiresAt == null || installation.BotTokenExpiresAt > DateTimeOffset.UtcNow.ToUnixTimeSeconds() + minutesBeforeExpiration * 60)
             return null;
 
-        var oAuthResult = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = bot.BotRefreshToken });
+        var oAuthResult = await client.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.BotRefreshToken });
         if (!oAuthResult.IsSuccesful)
             return null; 
 
@@ -122,7 +130,7 @@ public class SlackTokenRotator(RequestDelegate next)
         if (oAuthData.TokenType != "bot")
             return null;
 
-        Bot refreshedBot = new(bot)
+        Installation refreshedBot = installation with
         {
             BotToken = oAuthData.AccessToken,
             BotRefreshToken = oAuthData.RefreshToken,
@@ -131,12 +139,12 @@ public class SlackTokenRotator(RequestDelegate next)
         return refreshedBot;
     }
 
-    private static async Task<Installation?> PerformUserTokenRotation(SlackClient slackClient, Installation installation, int minutesBeforeExpiration)
+    private static async Task<Installation?> PerformUserTokenRotation(SlackClient client, Installation installation, int minutesBeforeExpiration)
     {
         if (installation.UserTokenExpiresAt == null || installation.UserTokenExpiresAt > DateTimeOffset.UtcNow.ToUnixTimeSeconds() + minutesBeforeExpiration * 60)
             return null;
 
-        var oAuthResult = await slackClient.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.UserRefreshToken });
+        var oAuthResult = await client.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.UserRefreshToken });
         if (!oAuthResult.IsSuccesful)
             return null;
 
@@ -144,15 +152,12 @@ public class SlackTokenRotator(RequestDelegate next)
         if (oAuthData.TokenType != "user")
             return null;
 
-        Installation refreshedInstallation = new(installation)
+        Installation refreshedInstallation = installation with
         {
             UserToken = oAuthData.AccessToken,
             UserRefreshToken = oAuthData.RefreshToken,
             UserTokenExpiresAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + oAuthData.ExpiresIn
         };
-
         return refreshedInstallation;
     }
-
-    
 }

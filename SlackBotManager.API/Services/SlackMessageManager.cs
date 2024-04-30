@@ -4,31 +4,31 @@ using SlackBotManager.API.Interfaces;
 using SlackBotManager.API.Models.Events;
 using SlackBotManager.API.Models.Commands;
 using SlackBotManager.API.Models.Core;
+using SlackBotManager.API.Interfaces.Invocations;
 
 namespace SlackBotManager.API.Services;
 
 public class SlackMessageManager
 {
-    private readonly SlackClient _slackClient;
+    private readonly SlackClient _client;
     private readonly ILogger<SlackMessageManager> _logger;
 
     private readonly Dictionary<string, Func<SlackClient, Command, Task<IRequestResult>>> _commands = [];
-    private readonly Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task>> _viewSubmissionInteractions = [];
-    private readonly Dictionary<string, Func<SlackClient, ViewClosedPayload, Task>> _viewClosedInteractions = [];
-    private readonly Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task>> _blockActionsInteractions = [];
+    private readonly Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task<IRequestResult>>> _viewSubmissionInteractions = [];
+    private readonly Dictionary<string, Func<SlackClient, ViewClosedPayload, Task<IRequestResult>>> _viewClosedInteractions = [];
+    private readonly Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task<IRequestResult>>> _blockActionsInteractions = [];
     private readonly Dictionary<string, Func<SlackClient, EventPayload, Task>> _events = [];
 
-    public SlackMessageManager(SlackClient slackClient,
+    public SlackMessageManager(SlackClient client,
                                ILogger<SlackMessageManager> logger,
-                               CreatePullRequestInvocation createPullRequestInvocation,
-                               HomeTabInvocation homeTabInvocation)
+                               IEnumerable<IInvocation> invocations)
     {
-        _slackClient = slackClient;
+        _client = client;
         _logger = logger;
-        AddInvocation(createPullRequestInvocation, homeTabInvocation);
+        AddInvocation(invocations);
     }
 
-    private void AddInvocation(params IInvocation[] invocations)
+    private void AddInvocation(IEnumerable<IInvocation> invocations)
     {
         foreach (var invocation in invocations)
         {
@@ -57,17 +57,16 @@ public class SlackMessageManager
     public Task<IRequestResult> HandleCommand(Command slackCommand)
     {
         if(_commands.TryGetValue(slackCommand.CommandText, out var commandHandler))
-            return _commands[slackCommand.CommandText].Invoke(_slackClient, slackCommand);
+            return _commands[slackCommand.CommandText].Invoke(_client, slackCommand);
 
         _logger.LogWarning("The requested command is not handled yet. Command: {Command}", slackCommand.CommandText);
 
         return Task.FromResult<IRequestResult>(RequestResult.Failure("Command is not handled yet"));
     }
 
-    public Task HandleInteractionPayload(string payloadString)
+    public Task<IRequestResult> HandleInteractionPayload(string payloadString)
     {
         var payload = JsonSerializer.Deserialize<IInteractionPayload>(payloadString, SlackClient.SlackJsonSerializerOptions);
-        if (payload == null) return Task.CompletedTask;
 
         if (payload is BlockActionsPayload blockActionsPayload)
             return HandleBlockActionsPayload(blockActionsPayload);
@@ -76,34 +75,41 @@ public class SlackMessageManager
         else if (payload is ViewClosedPayload viewClosedPayload)
             return HandleViewClosedPayload(viewClosedPayload);
 
-        return Task.CompletedTask;
+        return Task.FromResult<IRequestResult>(RequestResult.Failure("Payload type is not supported or empty"));
     }
 
     public Task HandleEventPayload(EventPayload payload)
     {
-        return _events[payload.Event.Type].Invoke(_slackClient, payload);
+        if (_events.TryGetValue(payload.Event.Type, out var eventHandler))
+            return eventHandler.Invoke(_client, payload);
+
+        _logger.LogWarning("The requested event interaction is not handled yet. " +
+                           "(EventType: {EventType})",
+                           payload.Event.Type);
+
+        return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested event interaction is not handled yet."));
     }
 
-    private Task HandleViewSubmissionPayload(ViewSubmissionPayload payload)
+    private Task<IRequestResult> HandleViewSubmissionPayload(ViewSubmissionPayload payload)
     {
         if (_viewSubmissionInteractions.TryGetValue(payload.View.CallbackId, out var bloackActionsInteractionHandler))
-            return bloackActionsInteractionHandler.Invoke(_slackClient, payload);
+            return bloackActionsInteractionHandler.Invoke(_client, payload);
 
         _logger.LogWarning("The requested view submission interaction is not handled yet. " +
                            "(ViewType: {ViewType}, ViewCallbackId: {CallbackId})",
                            payload.View.Type,
                            payload.View.CallbackId);
 
-        return Task.CompletedTask;
+        return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested view submission interaction is not handled yet."));
     }
 
-    private Task HandleViewClosedPayload(ViewClosedPayload payload) =>
-        _viewClosedInteractions[payload.View.CallbackId].Invoke(_slackClient, payload);
+    private Task<IRequestResult> HandleViewClosedPayload(ViewClosedPayload payload) =>
+        _viewClosedInteractions[payload.View.CallbackId].Invoke(_client, payload);
 
-    private Task HandleBlockActionsPayload(BlockActionsPayload payload)
+    private Task<IRequestResult> HandleBlockActionsPayload(BlockActionsPayload payload)
     {
         if(_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteractionHandler))
-            return bloackActionsInteractionHandler.Invoke(_slackClient, payload);
+            return bloackActionsInteractionHandler.Invoke(_client, payload);
 
         _logger.LogWarning("The requested block action interaction is not handled yet. " +
                            "(ViewType: {ViewType}, ViewCallbackId: {CallbackId}, BlockId: {BlockId}, ActionId: {ActionId})",
@@ -112,6 +118,6 @@ public class SlackMessageManager
                            payload.Actions.First().BlockId,
                            payload.Actions.First().ActionId);
 
-        return Task.CompletedTask;
+        return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested block action interaction is not handled yet."));
     }
 }

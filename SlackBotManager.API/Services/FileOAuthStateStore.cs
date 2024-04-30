@@ -1,4 +1,4 @@
-﻿using SlackBotManager.API.Interfaces;
+﻿using SlackBotManager.API.Interfaces.Stores;
 
 namespace SlackBotManager.API.Services;
 
