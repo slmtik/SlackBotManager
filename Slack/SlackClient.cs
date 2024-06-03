@@ -156,5 +156,12 @@ public class SlackClient(HttpClient httpClient,
 
         return ApiCall<ConversationInfoResponse>(new(HttpMethod.Get, $"conversations.info?{query}"));
     }
+
+    public Task<IRequestResult> ConversationsSetTopic(string channel, string topic)
+    {
+        var body = JsonSerializer.Serialize(new { channel, topic }, SlackJsonSerializerOptions);
+        StringContent content = new(body, Encoding.UTF8, "application/json");
+        return ApiCall(new(HttpMethod.Post, "conversations.setTopic") { Content = content });
+    }
     #endregion
 }

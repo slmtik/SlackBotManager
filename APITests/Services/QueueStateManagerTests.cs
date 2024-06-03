@@ -18,7 +18,7 @@ namespace SlackBotManager.API.Services.Tests
         private readonly string _requestingUserID = "userId";
         private readonly string _otherUserID = "otherUserId";
         private readonly IEnumerable<string> _branches = ["develop", "release"];
-        
+
         public QueueStateManagerTests()
         {
             _logger = new Mock<ILogger<QueueStateManager>>();
@@ -55,7 +55,7 @@ namespace SlackBotManager.API.Services.Tests
             _queueState.ReviewInCreation = new() { UserId = _requestingUserID, MessageTimestamp = "messageTimestamp" };
             SetQueueStateToReturn(_queueState);
 
-            var expected = _branches;   
+            var expected = _branches;
             var actual = await _queueStateManager.GetAvailableBranches(_requestingUserID);
 
             Assert.Equal(expected, actual);
@@ -112,7 +112,7 @@ namespace SlackBotManager.API.Services.Tests
         {
             _queueState.ReviewInCreation = new() { UserId = _requestingUserID, MessageTimestamp = "messageTimestamp" };
             SetQueueStateToReturn(_queueState);
-            
+
             var expected = _queueState.ReviewInCreation;
             var actual = await _queueStateManager.StartCreation(_requestingUserID);
 
@@ -298,6 +298,25 @@ namespace SlackBotManager.API.Services.Tests
             SetQueueStateToReturn(_queueState);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => _queueStateManager.FinishReview(messageTimestamp, ["release"]));
+        }
+
+        [Fact]
+        public async Task IsCreationAllowedTestTrueByDefault()
+        {
+            var actual = await _queueStateManager.IsCreationAllowed();
+
+            Assert.True(actual);
+        }
+
+        [Fact]
+        public async Task IsCreationAllowedTestChangeable()
+        {
+            SetQueueStateToReturn(_queueState);
+            await _queueStateManager.UpdateCreationAllowance(false);
+
+            var actual = await _queueStateManager.IsCreationAllowed();
+
+            Assert.False(actual);
         }
     }
 }

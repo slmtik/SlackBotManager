@@ -30,11 +30,12 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
         string filePath = Path.Combine(_directory, $"{enterpriseId}-{teamId}", $"{ConfigurationFile}-latest");
 
         T? instance = null;
-        if (!File.Exists(filePath))
-            return instance;
+        if (!File.Exists(filePath)) return instance;
 
         using var reader = new StreamReader(filePath);
         var content = await reader.ReadToEndAsync();
+        if (string.IsNullOrEmpty(content)) return instance;
+
         return JsonSerializer.Deserialize<T>(content);
     }
 

@@ -36,6 +36,8 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
         BlockActionsBindings.Add(("creation_message", "remove"), RemoveCreationMessage);
         BlockActionsBindings.Add(("branches", "edit"), EditBranches);
         BlockActionsBindings.Add(("tags", "edit"), EditTags);
+        BlockActionsBindings.Add(("pull_requests_creation", "allow"), UpdateCreationAllowance);
+        BlockActionsBindings.Add(("pull_requests_creation", "disallow"), UpdateCreationAllowance);
 
         ViewSubmissionBindings.Add("edit_branches", SubmitEditBranches);
         ViewSubmissionBindings.Add("edit_tags", SubmitEditTags);
@@ -51,7 +53,12 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                                                params (string BlockId, string Message)[] validationMessages)
     {
         var userInfoResult = await client.UserInfo(userId);
-        var setting = await _settingStore.Find() ?? new();
+        var setting = await _settingStore.Find();
+        if (setting is null)
+        {
+            setting = new();
+            await _settingStore.Save(setting);
+        }
 
         var isAppAdmin = userInfoResult.Value.User.IsAdmin || (setting.ApplicationAdminUsers?.Contains(userId) ?? false);
 
@@ -92,6 +99,29 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                     }
                 },                
             ]);
+
+            string allowancePrefix;
+            if (await _queueStateManager.IsCreationAllowed())
+                allowancePrefix = "Disallow";
+            else
+                allowancePrefix = "Allow";
+
+            blocks.AddRange(
+                [
+                    new DividerBlock(),
+                    new SectionBlock("Manage the allowance of creation pull requests")
+                    {
+                        BlockId = "pull_requests_creation",
+                        Accessory = new Button($"{allowancePrefix} creation")
+                        {
+                            ActionId = allowancePrefix.ToLower(),
+                            Confirm = new($"{allowancePrefix}ing to create pull requests",
+                                          $"You are going to {allowancePrefix.ToLower()} the creation of pull requests. Please confirm",
+                                          allowancePrefix,
+                                          "Cancel")
+                        }
+                    },
+                ]);
 
             if (!string.IsNullOrEmpty((await _queueStateManager.GetReviewInCreation())?.MessageTimestamp))
             {
@@ -285,6 +315,33 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                 await client.ViewPublish(payload.User.Id, await BuildHomeView(client, payload.User.Id));
             }
         }
+
+        return RequestResult.Success();
+    }
+
+    private async Task<IRequestResult> UpdateCreationAllowance(SlackClient client, BlockActionsPayload payload)
+    {
+        var actionId = payload.Actions.FirstOrDefault()?.ActionId;
+        bool allowCreatePullRequests = actionId == "allow";
+
+        string channelMessage, topicMessage;
+        if (allowCreatePullRequests)
+        {
+            topicMessage = "Feel Free to Create Pull Requests";
+            channelMessage = ":white_check_mark:Feel Free to Create Pull Requests:white_check_mark:";
+        }
+        else
+        {
+            topicMessage = "Do NOT Create Pull Request";
+            channelMessage = ":x:Do NOT Create Pull Request:x:";
+        }
+
+        await _queueStateManager.UpdateCreationAllowance(allowCreatePullRequests);
+
+        var setting = await _settingStore.Find();
+        await client.ChatPostMessage(new(setting.CreatePullRequestChannelId, channelMessage));
+        await client.ConversationsSetTopic(setting.CreatePullRequestChannelId, topicMessage);
+        await client.ViewPublish(payload.User.Id, await BuildHomeView(client, payload.User.Id));
 
         return RequestResult.Success();
     }

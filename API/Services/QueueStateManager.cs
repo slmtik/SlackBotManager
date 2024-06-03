@@ -17,7 +17,7 @@ public class QueueStateManager(IQueueStateStore queueStateStore, ISettingStore s
         if (!setting.Branches.Any() || (!queue.ReviewInCreation?.UserId.Equals(userId) ?? false))
             return [];
 
-        if (queue.ReviewQueue.Count == 0) 
+        if (queue.ReviewQueue.Count == 0)
             return setting.Branches;
 
         var reviews = queue.Peek();
@@ -83,7 +83,7 @@ public class QueueStateManager(IQueueStateStore queueStateStore, ISettingStore s
             throw new InvalidOperationException("Can't finish creation, there is no review in creation for this user");
 
         var createdReview = queue.ReviewInCreation with { MessageTimestamp = messageTimestamp };
-        foreach (var branch in branches) 
+        foreach (var branch in branches)
             queue.Enqueue(branch, createdReview);
 
         queue.ReviewInCreation = null;
@@ -104,9 +104,22 @@ public class QueueStateManager(IQueueStateStore queueStateStore, ISettingStore s
             throw new InvalidOperationException("Can't finish reviews, invalid branches");
 
         foreach (var branch in branches)
-            if(queue.Peek(branch).MessageTimestamp!.Equals(messageTimestamp))
+            if (queue.Peek(branch).MessageTimestamp!.Equals(messageTimestamp))
                 queue.Dequeue(branch);
-        
+
+        await _queueStateStore.Save(queue);
+    }
+
+    public async Task<bool> IsCreationAllowed()
+    {
+        var queue = await _queueStateStore.Find() ?? new();
+        return queue.CreationIsAllowed;
+    }
+
+    public async Task UpdateCreationAllowance(bool newAllowance)
+    {
+        var queue = await _queueStateStore.Find() ?? new();
+        queue.CreationIsAllowed = newAllowance;
         await _queueStateStore.Save(queue);
     }
 }

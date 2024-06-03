@@ -6,6 +6,7 @@ public record QueueState : StoreItemBase
 {
     public Dictionary<string, Collection<PullRequestReview>> ReviewQueue { get; init; } = [];
     public PullRequestReview? ReviewInCreation { get; set; }
+    public bool CreationIsAllowed { get; set; } = true;
 
     public Dictionary<string, PullRequestReview> Peek() => ReviewQueue.Where(kvp => kvp.Value.Count > 0)
                                                                       .ToDictionary(kvp => kvp.Key, kvp => kvp.Value.First());
