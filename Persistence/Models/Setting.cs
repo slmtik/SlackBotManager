@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.Persistence.Models;
+﻿using Persistence.Models;
+
+namespace SlackBotManager.Persistence.Models;
 
 public record Setting : StoreItemBase
 {
@@ -6,4 +8,5 @@ public record Setting : StoreItemBase
     public IEnumerable<string> Branches { get; set; } = ["develop", "release"];
     public IEnumerable<string> Tags { get; set; } = ["#usefull", "#easy"];
     public string[]? ApplicationAdminUsers { get; set; }
+    public ReminderSetting? ReminderSetting { get; set; }
 }

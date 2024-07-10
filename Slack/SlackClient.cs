@@ -42,22 +42,30 @@ public class SlackClient(HttpClient httpClient,
         };
     }
 
-    private async Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse 
+    private Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse 
     {
         request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
 
-        var responseMessage = await _httpClient.SendAsync(request);
+        return ApiCall<T>(_httpClient, request, _logger);
+    }
+
+    public static Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request) where T : BaseResponse =>
+        ApiCall<T>(httpClient, request, null);
+    
+        public static async Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request, ILogger? logger) where T : BaseResponse 
+    {
+        var responseMessage = await httpClient.SendAsync(request);
         responseMessage.EnsureSuccessStatusCode();
         T result = (await responseMessage.Content.ReadFromJsonAsync<T>(SlackJsonSerializerOptions))!;
-        
-        _logger.LogDebug("Slack Api response {HttpMethod} {RequestUri}:\n{ResponseMessage}", 
+
+        logger?.LogDebug("Slack Api response {HttpMethod} {RequestUri}:\n{ResponseMessage}",
             request.Method,
             request.RequestUri,
             await responseMessage.Content.ReadAsStringAsync());
 
         if (!result.Ok)
         {
-            _logger.LogError("Slack API error {HttpMethod} {RequestUri} {SlackError}\n{ResponseMetadata}",
+            logger?.LogError("Slack API error {HttpMethod} {RequestUri} {SlackError}\n{ResponseMetadata}",
                              request.Method,
                              request.RequestUri,
                              result.Error,

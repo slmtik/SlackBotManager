@@ -2,7 +2,7 @@
 
 public class AuthorizationUrlGenerator(IConfiguration configuration)
 {
-    private readonly string _authorizationUrl = "https://slack.com/oauth/v2/authorize";
+    private const string _authorizationUrl = "https://slack.com/oauth/v2/authorize";
 
     private readonly string _clienId = configuration["Slack:ClientId"] ?? throw new ArgumentException("Slack ClientId is not provided");
     private readonly string[]? _scopes = configuration.GetSection("Slack:Scopes").Get<string[]?>(); 

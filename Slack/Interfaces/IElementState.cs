@@ -11,6 +11,7 @@ namespace SlackBotManager.Slack.ElementStates;
 [JsonDerivedType(typeof(MultiSelectConversationsState), typeDiscriminator: "multi_conversations_select")]
 [JsonDerivedType(typeof(PlainTextInputState), typeDiscriminator: "plain_text_input")]
 [JsonDerivedType(typeof(MultiExternalSelectState), typeDiscriminator: "multi_external_select")]
+[JsonDerivedType(typeof(TimePickerState), typeDiscriminator: "timepicker")]
 public interface IElementState
 {
 }

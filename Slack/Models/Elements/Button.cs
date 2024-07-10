@@ -1,8 +1,9 @@
-﻿using System.Text.Json.Serialization;
+﻿using SlackBotManager.Slack.Blocks;
+using System.Text.Json.Serialization;
 
 namespace SlackBotManager.Slack.Elements;
 
-public class Button(PlainText text) : IElement
+public class Button(PlainText text) : ISectionElement, IActionElement
 {
     public PlainText Text { get; set; } = text;
     public string? ActionId { get; set; }

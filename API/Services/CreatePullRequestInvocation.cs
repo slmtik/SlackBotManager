@@ -366,7 +366,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         if (!messageMetadata.UserProfiles.ContainsKey(userId))
             messageMetadata.UserProfiles[userId] = (await client.UserInfo(userId)).Value.User.Profile;
 
-        var reviewersBlocks = new List<IElement>() { new PlainText("Reviewing:") };
+        var reviewersBlocks = new List<IContextElement>() { new PlainText("Reviewing:") };
         foreach (var item in messageMetadata.Reviewing)
             reviewersBlocks.Add(new Image(messageMetadata.UserProfiles[item].DisplayName, messageMetadata.UserProfiles[item].Image_24));
 

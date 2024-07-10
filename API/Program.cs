@@ -4,6 +4,7 @@ using SlackBotManager.API.Services;
 using SlackBotManager.Slack;
 using SlackBotManager.Persistence;
 using SlackBotManager.Persistence.FileStores;
+using API.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,13 @@ builder.Services.AddScoped<IInvocation, HomeTabInvocation>(sp =>
 );
 builder.Services.AddTransient<SlackMessageManager>();
 builder.Services.AddTransient<QueueStateManager>();
+builder.Services.AddTransient<SlackTokenRotator>();
+builder.Services.AddHostedService<ReviewReminderWorker>();
+builder.Services.AddHttpClient(ReviewReminderWorker.HttpClientName, (client) =>
+{
+    client.BaseAddress = new Uri("https://www.slack.com/api/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 var app = builder.Build();
 
@@ -56,7 +64,7 @@ app.UseWhen(
     app =>
     {
         app.UseMiddleware<SlackSignatureVerifier>();
-        app.UseMiddleware<SlackTokenRotator>();
+        app.UseMiddleware<InstallationTokenVerifier>();
     });
 
 app.Run();

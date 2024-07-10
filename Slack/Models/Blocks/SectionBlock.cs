@@ -8,7 +8,7 @@ public class SectionBlock : IBlock
     public string? BlockId { get; set; }
     public ITextObject? Text { get; set; }
     public IEnumerable<ITextObject>? Fields { get; set; }
-    public IElement? Accessory { get; set; }
+    public ISectionElement? Accessory { get; set; }
 
     [JsonConstructor]
     private SectionBlock() 

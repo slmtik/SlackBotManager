@@ -1,6 +1,6 @@
 ﻿namespace SlackBotManager.Slack.Elements;
 
-public class MultiSelectConversations : IElement
+public class MultiSelectConversations : ISectionElement
 {
     public string? ActionId { get; set; }
     public string[]? InitialConversations { get; set; }

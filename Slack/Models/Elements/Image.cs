@@ -1,6 +1,6 @@
 ﻿namespace SlackBotManager.Slack.Elements;
 
-public class Image : IElement
+public class Image : IContextElement
 {
     public string AltText { get; set; }
     public string ImageUrl { get; set; }

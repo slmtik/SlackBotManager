@@ -1,6 +1,6 @@
 ﻿namespace SlackBotManager.Slack.Elements;
 
-public class SelectPublicChannel : IElement
+public class SelectPublicChannel : ISectionElement, IInputElement
 {
     public string? ActionId { get; set; }
     public string? InitialChannel { get; set; }

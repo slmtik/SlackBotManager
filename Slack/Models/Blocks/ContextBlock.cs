@@ -2,8 +2,8 @@
 
 namespace SlackBotManager.Slack.Blocks;
 
-public class ContextBlock(IEnumerable<IElement> elements) : IBlock
+public class ContextBlock(IEnumerable<IContextElement> elements) : IBlock
 {
     public string? BlockId { get; set; }
-    public IEnumerable<IElement> Elements { get; set; } = elements;
+    public IEnumerable<IContextElement> Elements { get; set; } = elements;
 }

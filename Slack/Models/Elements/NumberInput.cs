@@ -1,6 +1,6 @@
 ﻿namespace SlackBotManager.Slack.Elements;
 
-public class NumberInput : IElement
+public class NumberInput : IInputElement
 {
     public bool IsDecimalAllowed { get; set; }
     public string? ActionId { get; set; }

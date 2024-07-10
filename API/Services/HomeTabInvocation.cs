@@ -9,6 +9,8 @@ using SlackBotManager.Slack.Views;
 using SlackBotManager.Slack;
 using SlackBotManager.Persistence;
 using SlackBotManager.Persistence.Models;
+using Slack.Models.Elements;
+using Persistence.Models;
 
 namespace SlackBotManager.API.Services;
 
@@ -38,9 +40,12 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
         BlockActionsBindings.Add(("tags", "edit"), EditTags);
         BlockActionsBindings.Add(("pull_requests_creation", "allow"), UpdateCreationAllowance);
         BlockActionsBindings.Add(("pull_requests_creation", "disallow"), UpdateCreationAllowance);
+        BlockActionsBindings.Add(("reminder", "settings"), SetupReminder);
+        BlockActionsBindings.Add(("reminder", "enable"), EnableReminder);
 
         ViewSubmissionBindings.Add("edit_branches", SubmitEditBranches);
         ViewSubmissionBindings.Add("edit_tags", SubmitEditTags);
+        ViewSubmissionBindings.Add("configure_reminder", SubmitConfigureReminder);
     }
 
     private async Task SendHomeTab(SlackClient client, EventPayload payload)
@@ -97,7 +102,7 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                         InitialConversations = setting.ApplicationAdminUsers,
                         Filter = new() { Include = [Filter.ConversationType.DirectMessages], ExcludeBotUsers = true }
                     }
-                },                
+                },
             ]);
 
             string allowancePrefix;
@@ -159,6 +164,19 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                         ActionId = "edit"
                     }
                 },
+            ]);
+
+            blocks.AddRange(
+            [
+                new DividerBlock(),
+                new SectionBlock(new MarkdownText("Reminder settings"))
+                {
+                    BlockId = "reminder",
+                    Accessory = new Button("Setup reminder logic")
+                    {
+                        ActionId = "settings"
+                    }
+                }
             ]);
         }
 
@@ -345,4 +363,114 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
 
         return RequestResult.Success();
     }
+
+    private async Task<IRequestResult> SetupReminder(SlackClient client, BlockActionsPayload payload)
+    {
+        await client.ViewOpen(payload.TriggerId, await BuildConfigureReminderModal());
+        return RequestResult.Success();
+    }
+
+    private async Task<ModalView> BuildConfigureReminderModal()
+    {
+        var setting = await _settingStore.Find();
+        ReminderSetting reminderSetting = setting.ReminderSetting ?? new();
+
+        List<IBlock> blocks =
+        [
+            new SectionBlock($"{(reminderSetting.Enabled ? "Disable" : "Enable")} reminder")
+            {
+                Accessory = new Button(reminderSetting.Enabled ? "Disable" : "Enable") { ActionId = "enable" },
+                BlockId = "reminder"
+            }
+        ];
+
+        if (reminderSetting.Enabled)
+            blocks.AddRange([
+                new InputBlock("Channel to use for reminding", new SelectPublicChannel() { ActionId = "select", InitialChannel = reminderSetting.RemindingChannelId })
+                {
+                    BlockId = "channel"
+                },
+                    new InputBlock("Enter reminder message template", new PlainTextInput()
+                {
+                    ActionId = "input",
+                    InitialValue = reminderSetting.MessageTemplate
+                })
+                {
+                    BlockId = "template"
+                },
+                new InputBlock("After what period in minutes to remind?", new NumberInput()
+                {
+                    ActionId = "input",
+                    InitialValue = reminderSetting.TimeToRemindInMinutes.ToString(),
+                    MinValue = "1"
+                })
+                {
+                    BlockId = "minutes"
+                },
+                new InputBlock("Work day starts at (UTC):", new TimePicker() 
+                { 
+                    InitialTime = reminderSetting.WorkDayStart,
+                    ActionId = "select"
+                })
+                {
+                    BlockId = "day_starts"
+                },
+                new InputBlock("Work day ends at (UTC):", new TimePicker() 
+                { 
+                    InitialTime = reminderSetting.WorkDayEnd,
+                    ActionId = "select"
+                })
+                {
+                    BlockId = "day_ends"
+                }
+            ]);
+
+        var configureReminderModal = new ModalView("Configure reminder logic", blocks) { Submit = new("Save"), CallbackId = "configure_reminder" };
+        return configureReminderModal;
+    }
+
+    private async Task<IRequestResult> EnableReminder(SlackClient client, BlockActionsPayload payload)
+    {
+        var setting = await _settingStore.Find() ??
+            new Setting()
+            {
+                EnterpriseId = payload.Enterprise?.Id,
+                TeamId = payload.Team?.Id,
+                IsEnterpriseInstall = payload.IsEnterpriseInstall,
+            };
+
+        setting.ReminderSetting ??= new ReminderSetting();
+        setting.ReminderSetting.Enabled = !setting.ReminderSetting.Enabled;
+
+        await _settingStore.Save(setting);
+        await client.ViewUpdate(payload.View.RootViewId, await BuildConfigureReminderModal());
+        return RequestResult.Success();
+    }
+
+    private async Task<IRequestResult> SubmitConfigureReminder(SlackClient client, ViewSubmissionPayload payload)
+    {
+        var setting = await _settingStore.Find() ??
+            new Setting()
+            {
+                EnterpriseId = payload.Enterprise?.Id,
+                TeamId = payload.Team?.Id,
+                IsEnterpriseInstall = payload.IsEnterpriseInstall,
+            };
+
+        setting.ReminderSetting ??= new ReminderSetting();
+
+        if (setting.ReminderSetting.Enabled)
+        {
+            setting.ReminderSetting.RemindingChannelId = ((SelectPublicChannelState)payload.View.State.Values["channel"].First().Value).SelectedChannel;
+            setting.ReminderSetting.MessageTemplate = ((PlainTextInputState)payload.View.State.Values["template"].First().Value).Value;
+            setting.ReminderSetting.TimeToRemindInMinutes = int.Parse(((NumberInputState)payload.View.State.Values["minutes"].First().Value).Value);
+            setting.ReminderSetting.WorkDayStart = ((TimePickerState)payload.View.State.Values["day_starts"].First().Value).SelectedTime;
+            setting.ReminderSetting.WorkDayEnd = ((TimePickerState)payload.View.State.Values["day_ends"].First().Value).SelectedTime;
+
+            await _settingStore.Save(setting);
+        }
+
+        return RequestResult.Success();
+    }
+
 }

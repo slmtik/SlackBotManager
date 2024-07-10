@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using SlackBotManager.Persistence.Models;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace SlackBotManager.Persistence.FileStores;
@@ -75,5 +76,25 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
         using var writer = new StreamWriter(instanceFilePath);
         var content = JsonSerializer.Serialize(instance);
         return writer.WriteAsync(content);
+    }
+
+    public async Task<Collection<T>> FindAll()
+    {
+        var allData = new Collection<T>();
+        DirectoryInfo directoryInfo = new DirectoryInfo(_directory);
+        if (directoryInfo.Exists)
+        {
+            foreach (var directory in directoryInfo.GetDirectories().Select(d => d.Name.Split("-")))
+            {
+                var (enterpriseId, teamId) = (directory[0], directory[1]);
+                T? instanceData = await Find(enterpriseId, teamId, teamId.Equals(_placeholder));
+                if (instanceData != null)
+                {
+                    allData.Add(instanceData);   
+                }
+            }
+        }
+
+        return allData;
     }
 }

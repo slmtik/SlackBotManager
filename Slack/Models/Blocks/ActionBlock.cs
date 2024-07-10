@@ -1,9 +1,7 @@
-﻿using SlackBotManager.Slack.Elements;
+﻿namespace SlackBotManager.Slack.Blocks;
 
-namespace SlackBotManager.Slack.Blocks;
-
-public class ActionBlock(IEnumerable<IElement> elements) : IBlock
+public class ActionBlock(IEnumerable<IActionElement> elements) : IBlock
 {
     public string? BlockId { get; set; }
-    public IEnumerable<IElement> Elements { get; set; } = elements;
+    public IEnumerable<IActionElement> Elements { get; set; } = elements;
 }
