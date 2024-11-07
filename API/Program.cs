@@ -25,12 +25,12 @@ builder.Services.AddScoped<ISettingStore, FileSettingStore>();
 builder.Services.AddScoped<IQueueStateStore, FileQueueStateStore>();
 builder.Services.AddTransient<AuthorizationUrlGenerator>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<CreatePullRequestInvocation>();
-builder.Services.AddScoped<IInvocation, CreatePullRequestInvocation>(sp => sp.GetRequiredService<CreatePullRequestInvocation>());
+builder.Services.AddScoped<PullRequestInvocation>();
+builder.Services.AddScoped<IInvocation, PullRequestInvocation>(sp => sp.GetRequiredService<PullRequestInvocation>());
 builder.Services.AddScoped<IInvocation, HomeTabInvocation>(sp =>
     new HomeTabInvocation(sp.GetRequiredService<ISettingStore>(), 
                           sp.GetRequiredService<QueueStateManager>(),
-                          sp.GetRequiredService<CreatePullRequestInvocation>())
+                          sp.GetRequiredService<PullRequestInvocation>())
 );
 builder.Services.AddTransient<SlackMessageManager>();
 builder.Services.AddTransient<QueueStateManager>();

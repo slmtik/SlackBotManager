@@ -12,7 +12,7 @@ using System.Text.Json.Nodes;
 
 namespace SlackBotManager.API.Services;
 
-public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionInvocation, IViewClosedInvocation, IBlockActionsInvocation
+public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocation, IViewClosedInvocation, IBlockActionsInvocation
 {
     private class ViewMetadata(string channelId, string timestamp)
     {
@@ -40,15 +40,15 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
                 new ("approved", JsonValue.Create(messageMetadata.Approved)),
                 new ("user_profiles", JsonValue.Create(messageMetadata.UserProfiles))
             };
-            
+
             return new JsonObject(jsonValues);
         }
 
         public static explicit operator MessageMetadata(JsonObject json)
         {
-            return new MessageMetadata(json["pull_request_author"].ToString(),
-                                       json["branches"].Deserialize<IEnumerable<string>>())
-            { 
+            return new MessageMetadata(json["pull_request_author"]?.ToString() ?? throw new ArgumentNullException(nameof(json)),
+                                       json["branches"]?.Deserialize<IEnumerable<string>>() ?? throw new ArgumentNullException(nameof(json)))
+            {
                 Reviewing = json["reviewing"].Deserialize<List<string>>(),
                 Approved = json["approved"].Deserialize<List<string>>(),
                 UserProfiles = json["user_profiles"].Deserialize<Dictionary<string, Profile>>(SlackClient.SlackJsonSerializerOptions)
@@ -64,7 +64,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
     public Dictionary<string, Func<SlackClient, ViewClosedPayload, Task<IRequestResult>>> ViewClosedBindings { get; } = [];
     public Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task<IRequestResult>>> BlockActionsBindings { get; } = [];
 
-    public CreatePullRequestInvocation(ISettingStore settingStore, QueueStateManager queueStateManager)
+    public PullRequestInvocation(ISettingStore settingStore, QueueStateManager queueStateManager)
     {
         _settingStore = settingStore;
         _queueStateManager = queueStateManager;
@@ -116,13 +116,13 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
             await _queueStateManager.UpdateCreation(commandRequest.UserId, messageTimestamp);
         }
 
-        var viewMetadata = new ViewMetadata(setting?.CreatePullRequestChannelId!, messageTimestamp) 
-        { 
-            Branches = availableBranches.First() == setting!.Branches.First() ? [setting!.Branches.First()] : [], 
-            IssuesNumber = 1 
+        var viewMetadata = new ViewMetadata(setting?.CreatePullRequestChannelId!, messageTimestamp)
+        {
+            Branches = availableBranches.First() == setting!.Branches.First() ? [setting!.Branches.First()] : [],
+            IssuesNumber = 1
         };
         await client.ViewOpen(commandRequest.TriggerId, BuildCreatePullRequestModal(viewMetadata, setting.Tags));
-        
+
         return RequestResult.Success();
     }
 
@@ -136,10 +136,10 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
         for (int i = 0; i < viewMetadata.IssuesNumber; i++)
             blockList.Add(new InputBlock("Issue Link", new UrlInput() { ActionId = "url_input" }) { BlockId = $"issue_tracker_{i}" });
 
-        blockList.Add(new InputBlock("Tags", new MultiStaticSelect(tags.Select(t => new Option<PlainText>(new(t), t))) { ActionId = "select" }) 
-        { 
-            BlockId = "tags", 
-            Optional = true 
+        blockList.Add(new InputBlock("Tags", new MultiStaticSelect(tags.Select(t => new Option<PlainText>(new(t), t))) { ActionId = "select" })
+        {
+            BlockId = "tags",
+            Optional = true
         });
         blockList.Add(new SectionBlock("Click to set branches or change number of issues")
         {
@@ -193,12 +193,11 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
             tags = selectedTags.SelectedOptions.Select(o => o.Value);
         }
 
-        List<string> links = [];
-        for (var i = 0; i < Math.Max(pullRequestLinks.Count, issueLinks.Count); i++)
-        {
-            links.Add(pullRequestLinks.ElementAtOrDefault(i) ?? " ");
-            links.Add(issueLinks.ElementAtOrDefault(i) ?? " ");
-        }
+        var linkSectionBlock = Enumerable.Range(0, Math.Max(pullRequestLinks.Count, issueLinks.Count))
+            .SelectMany(index => new[] { pullRequestLinks.ElementAtOrDefault(index) ?? " ", issueLinks.ElementAtOrDefault(index) ?? " " })
+            .Select(link => new MarkdownText(link))
+            .Chunk(10)
+            .Select(chunk => new SectionBlock(chunk));
 
         List<IBlock> blocks =
         [
@@ -207,8 +206,12 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
             {
                 BlockId = "sectionBlockOnlyMrkdwn"
             },
-            new DividerBlock(),
-            new SectionBlock(links.Select(l => new MarkdownText(l))) { BlockId = "sectionBlockOnlyFields" },
+            new DividerBlock()
+        ];
+
+        blocks.AddRange(linkSectionBlock);
+
+        blocks.Add(
             new ActionBlock(
             [
                 new Button("Review :eyes:") { ActionId = "review" },
@@ -228,8 +231,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
                         Style = "danger"
                     }
                 },
-            ]) { BlockId = "pull_request_status" },
-        ];
+            ]) { BlockId = "pull_request_status" });
 
         if (tags.Any())
         {
@@ -284,7 +286,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
     private async Task<IRequestResult> ShowManageDetailsView(SlackClient client, BlockActionsPayload payload)
     {
         ViewMetadata viewMetadata = JsonSerializer.Deserialize<ViewMetadata>(payload.View.PrivateMetadata)!;
-        
+
         await client.ViewPush(payload.TriggerId, BuildManageDetailsModal(viewMetadata, await _queueStateManager.GetAvailableBranches(payload.User.Id)));
 
         return RequestResult.Success();
@@ -293,25 +295,25 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
     private static ModalView BuildManageDetailsModal(ViewMetadata viewMetadata, IEnumerable<string> branches)
     {
         var initialBranches = branches.Where(b => viewMetadata.Branches.Contains(b)).Select(o => new Option<PlainText>(new(o), o)).ToList();
-        
+
         return new ModalView("Manage Details",
         [
-            new InputBlock("Branches", 
+            new InputBlock("Branches",
                 new MultiStaticSelect(branches.Select(b => new Option<PlainText>(new(b), b)))
                 {
                     InitialOptions = initialBranches.Count > 0 ? initialBranches : null,
                     ActionId = "multi_static_select"
-                }) 
+                })
             { BlockId = "branches" },
-            new InputBlock("Number of issues in pull request", 
+            new InputBlock("Number of issues in pull request",
                 new NumberInput()
                 {
                     IsDecimalAllowed = false,
                     ActionId = "number_input",
                     InitialValue = viewMetadata.IssuesNumber.ToString(),
-                    MinValue = 1.ToString(),
-                    MaxValue = 5.ToString()
-                }) 
+                    MinValue = $"{1}",
+                    MaxValue = $"{15}"
+                })
             { BlockId = "issues" }
         ])
         {
@@ -391,7 +393,7 @@ public class CreatePullRequestInvocation : ICommandInvocation, IViewSubmissionIn
     {
         var messageMetadata = (MessageMetadata)payload.Message.Metadata.EventPayload!;
         messageMetadata.Reviewing ??= [];
-        
+
         var pullRequestStatus = payload.Actions.First().ActionId;
         var currentUserId = payload.User.Id;
 
