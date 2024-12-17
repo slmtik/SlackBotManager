@@ -347,16 +347,21 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
         return RequestResult.Success();
     }
 
-    private async static Task<bool> UpdateReviewers(SlackClient client, Message message, string pullRequestStatus, string userId)
+    private async static Task<bool> UpdateReviewers(SlackClient client, Message message, string pullRequestStatus, string currentUserId)
     {
         var messageMetadata = (MessageMetadata)message.Metadata.EventPayload!;
         messageMetadata.Reviewing ??= [];
         messageMetadata.Approved ??= [];
 
-        if (pullRequestStatus.Equals("review") && !messageMetadata.Reviewing.Contains(userId))
-            messageMetadata.Reviewing.Add(userId);
-        else if (pullRequestStatus.Equals("approve") && !messageMetadata.Approved.Contains(userId) && messageMetadata.Reviewing.Contains(userId))
-            messageMetadata.Approved.Add(userId);
+        if (pullRequestStatus.Equals("review") && !messageMetadata.Reviewing.Contains(currentUserId))
+            messageMetadata.Reviewing.Add(currentUserId);
+        else if (pullRequestStatus.Equals("approve") && !messageMetadata.Approved.Contains(currentUserId)
+            && messageMetadata.Reviewing.Contains(currentUserId))
+            messageMetadata.Approved.Add(currentUserId);
+#if DEBUG
+        else if (pullRequestStatus.Equals("review") && messageMetadata.PullRequestAuthor.Equals(currentUserId))
+            return false;
+#endif
         else
             return false;
 
@@ -365,8 +370,8 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
 
         messageMetadata.UserProfiles ??= [];
 
-        if (!messageMetadata.UserProfiles.ContainsKey(userId))
-            messageMetadata.UserProfiles[userId] = (await client.UserInfo(userId)).Value.User.Profile;
+        if (!messageMetadata.UserProfiles.ContainsKey(currentUserId))
+            messageMetadata.UserProfiles[currentUserId] = (await client.UserInfo(currentUserId)).Value.User.Profile;
 
         var reviewersBlocks = new List<IContextElement>() { new PlainText("Reviewing:") };
         foreach (var item in messageMetadata.Reviewing)
@@ -397,7 +402,8 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
         var pullRequestStatus = payload.Actions.First().ActionId;
         var currentUserId = payload.User.Id;
 
-        if (!messageMetadata.Reviewing.Contains(currentUserId) && !(pullRequestStatus.Equals("close") && messageMetadata.PullRequestAuthor.Equals(currentUserId)))
+        if (!messageMetadata.Reviewing.Contains(currentUserId) && !(pullRequestStatus.Equals("close") 
+            && messageMetadata.PullRequestAuthor.Equals(currentUserId)))
             return RequestResult.Success();
 
         var (message, messageBlocks) = (payload.Message, payload.Message.Blocks.ToList());
