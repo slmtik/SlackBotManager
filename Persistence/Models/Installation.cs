@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Persistence.Models;
+﻿namespace Persistence.Models;
 
 public record Installation : StoreItemBase
 {
@@ -14,8 +14,8 @@ public record Installation : StoreItemBase
     public string? BotUserId { get; set; }
     public string? BotScopes { get; set; }
     public string? BotRefreshToken { get; set; }
-    public int? BotTokenExpiresIn 
-    { 
+    public int? BotTokenExpiresIn
+    {
         get => _botTokenExpiresIn;
         set
         {
@@ -26,8 +26,8 @@ public record Installation : StoreItemBase
     public string? UserToken { get; set; }
     public string? UserScopes { get; set; }
     public string? UserRefreshToken { get; set; }
-    public int? UserTokenExpiresIn 
-    { 
+    public int? UserTokenExpiresIn
+    {
         get => _userTokenExpiresIn;
         set
         {

@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.Slack.Blocks;
+﻿using Slack.Interfaces;
+
+namespace Slack.Models.Blocks;
 
 public class ActionBlock(IEnumerable<IActionElement> elements) : IBlock
 {

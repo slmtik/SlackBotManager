@@ -1,6 +1,7 @@
-﻿using System.Text.Json.Serialization;
+﻿using Slack.Models.Elements;
+using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Elements;
+namespace Slack.Interfaces;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(PlainText), typeDiscriminator: "plain_text")]

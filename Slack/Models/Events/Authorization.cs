@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Events;
+namespace Slack.Models.Events;
 
 public class Authorization
 {

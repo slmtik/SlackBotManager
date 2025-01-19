@@ -1,19 +1,13 @@
-﻿using SlackBotManager.Slack;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.Models;
+﻿using Persistence.Models;
+using Persistence.Interfaces;
+using Slack;
 
-namespace SlackBotManager.API.Services;
+namespace API.Services;
 
-public class SlackTokenRotator
+public class SlackTokenRotator(IInstallationStore installationStore, SlackClient client)
 {
-    private readonly IInstallationStore _installationStore;
-    private readonly SlackClient _client;
-
-    public SlackTokenRotator(IInstallationStore installationStore, SlackClient client)
-    {
-        _installationStore = installationStore;
-        _client = client;
-    }
+    private readonly IInstallationStore _installationStore = installationStore;
+    private readonly SlackClient _client = client;
 
     public async Task<bool> RotateToken(InstanceData instanceData)
     {
@@ -51,7 +45,7 @@ public class SlackTokenRotator
 
         var oAuthResult = await _client.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.BotRefreshToken });
         if (!oAuthResult.IsSuccesful)
-            return null; 
+            return null;
 
         var oAuthData = oAuthResult.Value!;
         if (oAuthData.TokenType != "bot")

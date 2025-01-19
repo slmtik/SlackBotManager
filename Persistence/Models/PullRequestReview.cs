@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Persistence.Models;
+﻿namespace Persistence.Models;
 
 public record PullRequestReview
 {

@@ -1,13 +1,15 @@
 ﻿using System.Text.Json;
-using SlackBotManager.Slack.Payloads;
-using SlackBotManager.Slack.Events;
-using SlackBotManager.Slack.Commands;
-using SlackBotManager.API.Invocations;
-using SlackBotManager.Slack;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.Models;
+using Persistence.Models;
+using Persistence.Interfaces;
+using Slack;
+using Slack.Interfaces;
+using Slack.Models;
+using API.Interfaces.Invocations;
+using Slack.Models.Events;
+using Slack.Models.Commands;
+using Slack.Models.Payloads;
 
-namespace SlackBotManager.API.Services;
+namespace API.Services;
 
 public class SlackMessageManager
 {
@@ -60,7 +62,7 @@ public class SlackMessageManager
 
     public Task<IRequestResult> HandleCommand(Command slackCommand)
     {
-        if(_commands.TryGetValue(slackCommand.CommandText, out var commandHandler))
+        if (_commands.TryGetValue(slackCommand.CommandText, out var commandHandler))
             return _commands[slackCommand.CommandText].Invoke(_client, slackCommand);
 
         _logger.LogWarning("The requested command is not handled yet. Command: {Command}", slackCommand.CommandText);
@@ -112,7 +114,7 @@ public class SlackMessageManager
 
     private Task<IRequestResult> HandleBlockActionsPayload(BlockActionsPayload payload)
     {
-        if(_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteractionHandler))
+        if (_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteractionHandler))
             return bloackActionsInteractionHandler.Invoke(_client, payload);
 
         _logger.LogWarning("The requested block action interaction is not handled yet. " +

@@ -1,7 +1,8 @@
-﻿using SlackBotManager.Slack.Elements;
+﻿using Slack.Interfaces;
+using Slack.Models.Elements;
 using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Blocks;
+namespace Slack.Models.Blocks;
 
 public class HeaderBlock : IBlock
 {

@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Persistence;
+﻿namespace Persistence.Models;
 
 public abstract record StoreItemBase
 {

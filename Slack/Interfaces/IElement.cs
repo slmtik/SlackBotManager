@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Slack.Elements;
+﻿namespace Slack.Interfaces;
 
 public interface IElement
 {

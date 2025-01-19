@@ -1,4 +1,7 @@
-﻿namespace SlackBotManager.Slack.Payloads;
+﻿using Slack.Interfaces;
+using Slack.Models.Payloads;
+
+namespace Slack.Models.Payloads;
 
 public class ViewClosedPayload : IInteractionPayload
 {

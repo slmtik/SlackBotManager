@@ -1,6 +1,4 @@
-﻿using SlackBotManager.Slack.Blocks;
-
-namespace SlackBotManager.Slack.Views;
+﻿namespace Slack.Interfaces;
 
 public interface IView
 {

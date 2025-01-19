@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Persistence.Models;
+﻿namespace Persistence.Models;
 
 public record InstanceData(string? EnterpriseId, string? TeamId, bool? IsEnterpriseInstall)
 {

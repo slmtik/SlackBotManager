@@ -1,16 +1,19 @@
-﻿using SlackBotManager.API.Invocations;
-using SlackBotManager.Persistence;
-using SlackBotManager.Slack;
-using SlackBotManager.Slack.Blocks;
-using SlackBotManager.Slack.Commands;
-using SlackBotManager.Slack.Elements;
-using SlackBotManager.Slack.ElementStates;
-using SlackBotManager.Slack.Payloads;
-using SlackBotManager.Slack.Views;
+﻿using API.Interfaces.Invocations;
+using Persistence.Interfaces;
+using Slack;
+using Slack.Interfaces;
+using Slack.Models;
+using Slack.Models.Blocks;
+using Slack.Models.Commands;
+using Slack.Models.Elements;
+using Slack.Models.ElementStates;
+using Slack.Models.Payloads;
+using Slack.Models.SlackClient;
+using Slack.Models.Views;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace SlackBotManager.API.Services;
+namespace API.Services;
 
 public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocation, IViewClosedInvocation, IBlockActionsInvocation
 {
@@ -231,7 +234,8 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
                         Style = "danger"
                     }
                 },
-            ]) { BlockId = "pull_request_status" });
+            ])
+            { BlockId = "pull_request_status" });
 
         if (tags.Any())
         {
@@ -402,7 +406,7 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
         var pullRequestStatus = payload.Actions.First().ActionId;
         var currentUserId = payload.User.Id;
 
-        if (!messageMetadata.Reviewing.Contains(currentUserId) && !(pullRequestStatus.Equals("close") 
+        if (!messageMetadata.Reviewing.Contains(currentUserId) && !(pullRequestStatus.Equals("close")
             && messageMetadata.PullRequestAuthor.Equals(currentUserId)))
             return RequestResult.Success();
 

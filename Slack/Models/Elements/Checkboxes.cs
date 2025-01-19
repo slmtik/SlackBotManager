@@ -1,4 +1,4 @@
-﻿using SlackBotManager.Slack.Elements;
+﻿using Slack.Interfaces;
 
 namespace Slack.Models.Elements;
 

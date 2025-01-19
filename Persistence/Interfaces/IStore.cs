@@ -1,6 +1,6 @@
-﻿using SlackBotManager.Persistence.Models;
+﻿using Persistence.Models;
 
-namespace SlackBotManager.Persistence
+namespace Persistence.Interfaces
 {
     public interface IStore<T> where T : StoreItemBase
     {

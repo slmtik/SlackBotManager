@@ -1,10 +1,10 @@
-using SlackBotManager.API.Invocations;
-using SlackBotManager.API.MIddlewares;
-using SlackBotManager.API.Services;
-using SlackBotManager.Slack;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.FileStores;
 using API.Workers;
+using Persistence.FileStores;
+using Persistence.Interfaces;
+using Slack;
+using API.Services;
+using API.MIddlewares;
+using API.Interfaces.Invocations;
 
 var builder = WebApplication.CreateBuilder(args);
 

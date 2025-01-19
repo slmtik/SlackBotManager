@@ -2,13 +2,16 @@
 using System.Text.Json;
 using System.Text;
 using System.Web;
-using SlackBotManager.Slack.Views;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using System.Net.Http.Json;
+using Slack.Interfaces;
+using Slack.Models.SlackClient;
+using Slack.Models.Views;
+using Slack.Models;
 
-namespace SlackBotManager.Slack;
+namespace Slack;
 
 public class SlackClient(HttpClient httpClient,
                          IConfiguration configuration,
@@ -42,7 +45,7 @@ public class SlackClient(HttpClient httpClient,
         };
     }
 
-    private Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse 
+    private Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse
     {
         request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
 
@@ -51,8 +54,8 @@ public class SlackClient(HttpClient httpClient,
 
     public static Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request) where T : BaseResponse =>
         ApiCall<T>(httpClient, request, null);
-    
-        public static async Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request, ILogger? logger) where T : BaseResponse 
+
+    public static async Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request, ILogger? logger) where T : BaseResponse
     {
         var responseMessage = await httpClient.SendAsync(request);
         responseMessage.EnsureSuccessStatusCode();

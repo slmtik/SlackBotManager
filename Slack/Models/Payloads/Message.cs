@@ -1,7 +1,7 @@
-﻿using SlackBotManager.Slack.Blocks;
+﻿using Slack.Interfaces;
 using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Payloads;
+namespace Slack.Models.Payloads;
 
 public class Message
 {

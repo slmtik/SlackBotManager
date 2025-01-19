@@ -1,8 +1,8 @@
-﻿using SlackBotManager.Slack.Blocks;
-using SlackBotManager.Slack.Payloads;
+﻿using Slack.Interfaces;
+using Slack.Models.Payloads;
 using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack;
+namespace Slack.Models.SlackClient;
 
 public class ChaUpdateMessageRequest
 {

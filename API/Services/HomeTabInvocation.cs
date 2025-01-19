@@ -1,18 +1,18 @@
-﻿using SlackBotManager.API.Invocations;
-using SlackBotManager.Slack.Blocks;
-using SlackBotManager.Slack.Commands;
-using SlackBotManager.Slack.Elements;
-using SlackBotManager.Slack.ElementStates;
-using SlackBotManager.Slack.Events;
-using SlackBotManager.Slack.Payloads;
-using SlackBotManager.Slack.Views;
-using SlackBotManager.Slack;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.Models;
-using Slack.Models.Elements;
+﻿using Slack.Models.Elements;
 using Persistence.Models;
+using Persistence.Interfaces;
+using Slack;
+using Slack.Interfaces;
+using Slack.Models.ElementStates;
+using Slack.Models.Views;
+using Slack.Models;
+using API.Interfaces.Invocations;
+using Slack.Models.Payloads;
+using Slack.Models.Events;
+using Slack.Models.Blocks;
+using Slack.Models.Commands;
 
-namespace SlackBotManager.API.Services;
+namespace API.Services;
 
 public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IViewSubmissionInvocation
 {
@@ -407,16 +407,16 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                 {
                     BlockId = "minutes"
                 },
-                new InputBlock("Work day starts at (UTC):", new TimePicker() 
-                { 
+                new InputBlock("Work day starts at (UTC):", new TimePicker()
+                {
                     InitialTime = reminderSetting.WorkDayStart,
                     ActionId = "select"
                 })
                 {
                     BlockId = "day_starts"
                 },
-                new InputBlock("Work day ends at (UTC):", new TimePicker() 
-                { 
+                new InputBlock("Work day ends at (UTC):", new TimePicker()
+                {
                     InitialTime = reminderSetting.WorkDayEnd,
                     ActionId = "select"
                 })

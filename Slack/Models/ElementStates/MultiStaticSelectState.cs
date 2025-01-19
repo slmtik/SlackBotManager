@@ -1,6 +1,7 @@
-﻿using SlackBotManager.Slack.Elements;
+﻿using Slack.Interfaces;
+using Slack.Models.Elements;
 
-namespace SlackBotManager.Slack.ElementStates;
+namespace Slack.Models.ElementStates;
 
 public class MultiStaticSelectState : IElementState
 {

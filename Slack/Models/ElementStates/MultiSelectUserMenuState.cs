@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.Slack.ElementStates;
+﻿using Slack.Interfaces;
+
+namespace Slack.Models.ElementStates;
 
 public class MultiSelectUserState : IElementState
 {

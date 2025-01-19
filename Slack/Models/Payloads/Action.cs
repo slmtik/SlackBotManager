@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Slack.Payloads;
+﻿namespace Slack.Models.Payloads;
 
 public class Action
 {

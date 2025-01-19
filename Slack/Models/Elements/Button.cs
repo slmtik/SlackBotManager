@@ -1,7 +1,7 @@
-﻿using SlackBotManager.Slack.Blocks;
+﻿using Slack.Interfaces;
 using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Elements;
+namespace Slack.Models.Elements;
 
 public class Button(PlainText text) : ISectionElement, IActionElement
 {

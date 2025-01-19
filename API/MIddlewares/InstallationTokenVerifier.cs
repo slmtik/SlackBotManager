@@ -1,12 +1,12 @@
-﻿using SlackBotManager.API.Extensions;
-using SlackBotManager.Slack;
-using System.Net;
+﻿using System.Net;
 using System.Text.Json.Nodes;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.Models;
-using SlackBotManager.API.Services;
+using Persistence.Interfaces;
+using Persistence.Models;
+using Slack;
+using API.Services;
+using API.Extensions;
 
-namespace SlackBotManager.API.MIddlewares;
+namespace API.MIddlewares;
 
 public class InstallationTokenVerifier(RequestDelegate next)
 {
@@ -26,7 +26,7 @@ public class InstallationTokenVerifier(RequestDelegate next)
         }
 
         var instanceData = ParseBody(rawBody, context.Request.Headers.ContentType.ToString());
-        
+
         if (!await slackTokenRotator.RotateToken(instanceData))
         {
             context.Response.StatusCode = (int)HttpStatusCode.OK;

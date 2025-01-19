@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 
-namespace SlackBotManager.Slack.Commands;
+namespace Slack.Models.Commands;
 
 public class Command
 {

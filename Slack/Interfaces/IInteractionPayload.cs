@@ -1,6 +1,7 @@
-﻿using System.Text.Json.Serialization;
+﻿using Slack.Models.Payloads;
+using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Payloads;
+namespace Slack.Interfaces;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(BlockActionsPayload), typeDiscriminator: "block_actions")]

@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace SlackBotManager.Slack.Elements;
+namespace Slack.Models.Elements;
 
 public class ButtonConfirm(PlainText title, PlainText text, PlainText confirm, PlainText deny)
 {

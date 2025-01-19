@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.Slack.Payloads;
+﻿using Slack.Interfaces;
+
+namespace Slack.Models.Payloads;
 
 public class BlockActionsPayload : IInteractionPayload
 {

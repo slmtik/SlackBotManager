@@ -1,6 +1,6 @@
-﻿using SlackBotManager.Slack.Blocks;
+﻿using Slack.Interfaces;
 
-namespace SlackBotManager.Slack.Views;
+namespace Slack.Models.Views;
 
 public class HomeView(IEnumerable<IBlock> blocks) : IView
 {

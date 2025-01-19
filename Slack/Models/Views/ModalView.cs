@@ -1,7 +1,7 @@
-﻿using SlackBotManager.Slack.Blocks;
-using SlackBotManager.Slack.Elements;
+﻿using Slack.Interfaces;
+using Slack.Models.Elements;
 
-namespace SlackBotManager.Slack.Views;
+namespace Slack.Models.Views;
 
 public class ModalView(PlainText title, IEnumerable<IBlock> blocks) : IView
 {
@@ -15,6 +15,6 @@ public class ModalView(PlainText title, IEnumerable<IBlock> blocks) : IView
 
     public ModalView(string title, IEnumerable<IBlock> blocks) : this(new PlainText(title), blocks)
     {
-        
+
     }
 }

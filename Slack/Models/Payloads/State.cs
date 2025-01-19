@@ -1,6 +1,6 @@
-﻿using SlackBotManager.Slack.ElementStates;
+﻿using Slack.Interfaces;
 
-namespace SlackBotManager.Slack.Payloads;
+namespace Slack.Models.Payloads;
 
 public class State
 {

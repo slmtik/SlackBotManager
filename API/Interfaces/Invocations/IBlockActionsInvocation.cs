@@ -1,7 +1,8 @@
-﻿using SlackBotManager.Slack.Payloads;
-using SlackBotManager.Slack;
+﻿using Slack;
+using Slack.Interfaces;
+using Slack.Models.Payloads;
 
-namespace SlackBotManager.API.Invocations;
+namespace API.Interfaces.Invocations;
 
 public interface IBlockActionsInvocation : IInvocation
 {

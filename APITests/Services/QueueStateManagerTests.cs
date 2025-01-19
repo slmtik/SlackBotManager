@@ -1,10 +1,11 @@
 ﻿using Xunit;
 using Moq;
 using Microsoft.Extensions.Logging;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.Models;
+using Persistence.Models;
+using Persistence.Interfaces;
+using API.Services;
 
-namespace SlackBotManager.API.Services.Tests
+namespace APITests.Services
 {
     public class QueueStateManagerTests
     {

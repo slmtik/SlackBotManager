@@ -1,11 +1,14 @@
-﻿using SlackBotManager.API.Services;
-using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.FileStores;
-using SlackBotManager.Persistence.Models;
-using SlackBotManager.Slack;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Net.Http.Headers;
+using Persistence.Interfaces;
+using Persistence.Models;
+using Persistence.FileStores;
+using Slack;
+using API.Services;
+using Slack.Interfaces;
+using Slack.Models.SlackClient;
+using Slack.Models;
 
 namespace API.Workers;
 

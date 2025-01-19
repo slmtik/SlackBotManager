@@ -1,6 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 
-namespace SlackBotManager.Persistence.Models;
+namespace Persistence.Models;
 
 public record QueueState : StoreItemBase
 {
@@ -12,7 +12,7 @@ public record QueueState : StoreItemBase
                                                                       .ToDictionary(kvp => kvp.Key, kvp => kvp.Value.First());
 
     public PullRequestReview Peek(string branch) => ReviewQueue[branch].First();
-    
+
     public void Enqueue(string branch, PullRequestReview review)
     {
         if (!ReviewQueue.ContainsKey(branch))

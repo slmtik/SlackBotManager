@@ -1,6 +1,6 @@
-﻿using SlackBotManager.Slack.Elements;
+﻿using Slack.Interfaces;
 
-namespace SlackBotManager.Slack.Blocks;
+namespace Slack.Models.Blocks;
 
 public class ContextBlock(IEnumerable<IContextElement> elements) : IBlock
 {

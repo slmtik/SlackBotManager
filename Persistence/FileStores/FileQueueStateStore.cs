@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
-using SlackBotManager.Persistence.Models;
+using Persistence.Interfaces;
+using Persistence.Models;
 
-namespace SlackBotManager.Persistence.FileStores;
+namespace Persistence.FileStores;
 
 public class FileQueueStateStore(IConfiguration configuration, IHttpContextAccessor httpContextAccessor) :
     FileStoreBase<QueueState>(configuration, httpContextAccessor), IQueueStateStore

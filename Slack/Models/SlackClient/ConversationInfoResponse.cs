@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.Slack;
+﻿using Slack.Models.SlackClient;
+
+namespace Slack.Models.SlackClient;
 
 public class ConversationInfoResponse : BaseResponse
 {

@@ -1,7 +1,7 @@
-﻿using SlackBotManager.Persistence;
-using SlackBotManager.Persistence.Models;
+﻿using Persistence.Interfaces;
+using Persistence.Models;
 
-namespace SlackBotManager.API.Services;
+namespace API.Services;
 
 public class QueueStateManager(IQueueStateStore queueStateStore, ISettingStore settingStore, ILogger<QueueStateManager> logger)
 {

@@ -1,4 +1,6 @@
-﻿namespace SlackBotManager.Slack.Elements;
+﻿using Slack.Interfaces;
+
+namespace Slack.Models.Elements;
 
 public class MultiSelectConversations : ISectionElement
 {

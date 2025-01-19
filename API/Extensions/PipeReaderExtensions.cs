@@ -2,7 +2,7 @@
 using System.IO.Pipelines;
 using System.Text;
 
-namespace SlackBotManager.API.Extensions
+namespace API.Extensions
 {
     public static class PipeReaderExtensions
     {

@@ -1,13 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using SlackBotManager.Slack.Events;
-using SlackBotManager.API.Services;
-using SlackBotManager.Slack.Commands;
 using System.Text.Json.Nodes;
-using SlackBotManager.Persistence;
+using Persistence.Interfaces;
+using API.Services;
+using Slack.Models.Events;
+using Slack.Models.Commands;
 
-namespace SlackBotManager.API.Controllers;
+namespace API.Controllers;
 
-[Route("api/slack")]
+[Route("api/[controller]")]
 [ApiController]
 public class SlackController(SlackMessageManager slackMessageManager,
                              AuthorizationUrlGenerator authorizationUrlGenerator,

@@ -1,9 +1,9 @@
-﻿using SlackBotManager.API.Extensions;
+﻿using API.Extensions;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace SlackBotManager.API.MIddlewares;
+namespace API.MIddlewares;
 
 public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configuration)
 {
@@ -21,7 +21,7 @@ public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configu
             context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
             return;
         }
-        
+
         await _next(context);
     }
 

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Persistence.Interfaces;
 
-namespace SlackBotManager.Persistence.FileStores;
+namespace Persistence.FileStores;
 
 public class FileOAuthStateStore(IConfiguration configuration) : IOAuthStateStore
 {

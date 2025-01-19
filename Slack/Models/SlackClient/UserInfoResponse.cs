@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Slack;
+﻿namespace Slack.Models.SlackClient;
 
 public class UserInfoResponse : BaseResponse
 {

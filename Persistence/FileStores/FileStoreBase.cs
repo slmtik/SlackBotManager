@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
-using SlackBotManager.Persistence.Models;
+using Persistence.Interfaces;
+using Persistence.Models;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 
-namespace SlackBotManager.Persistence.FileStores;
+namespace Persistence.FileStores;
 
 public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
 {
@@ -13,7 +14,7 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
     abstract protected string ConfigurationFile { get; }
     protected const string _placeholder = "none";
     protected readonly string _directory;
-    
+
     private readonly IHttpContextAccessor _httpContextAccessor;
 
     protected FileStoreBase(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
@@ -90,7 +91,7 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
                 T? instanceData = await Find(enterpriseId, teamId, teamId.Equals(_placeholder));
                 if (instanceData != null)
                 {
-                    allData.Add(instanceData);   
+                    allData.Add(instanceData);
                 }
             }
         }

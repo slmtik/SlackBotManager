@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Persistence;   
+﻿namespace Persistence.Interfaces;
 
 public interface IOAuthStateStore
 {

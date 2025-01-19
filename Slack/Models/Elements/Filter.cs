@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Slack.Elements;
+﻿namespace Slack.Models.Elements;
 
 public class Filter
 {

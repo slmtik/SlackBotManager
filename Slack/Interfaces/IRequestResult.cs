@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Slack;
+﻿namespace Slack.Interfaces;
 
 public interface IRequestResult
 {

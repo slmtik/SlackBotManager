@@ -1,4 +1,4 @@
-﻿namespace SlackBotManager.Slack.Events;
+﻿namespace Slack.Models.Events;
 
 public class Event
 {
