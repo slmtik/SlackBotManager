@@ -1,4 +1,4 @@
-﻿namespace Slack.Models.SlackClient;
+﻿namespace Slack.DTO;
 
 public class OAuthV2SuccessRequest
 {

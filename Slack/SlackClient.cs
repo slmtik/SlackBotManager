@@ -5,66 +5,32 @@ using System.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
-using System.Net.Http.Json;
-using Slack.Interfaces;
-using Slack.Models.SlackClient;
 using Slack.Models.Views;
-using Slack.Models;
+using Slack.DTO;
+using Core.ApiClient;
 
 namespace Slack;
 
 public class SlackClient(HttpClient httpClient,
                          IConfiguration configuration,
                          ILogger<SlackClient> logger,
-                         IHttpContextAccessor httpContextAccessor)
+                         IHttpContextAccessor httpContextAccessor) : BaseApiClient<SlackResponse>(httpClient, logger)
 {
-
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly ILogger<SlackClient> _logger = logger;
-    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private readonly string _clientId = configuration["Slack:ClientId"] ?? throw new ArgumentException("Slack ClientId is not provided");
     private readonly string _clientSecret = configuration["Slack:ClientSecret"] ?? throw new ArgumentException("Slack ClientSecret is not provided");
 
     public const string BotTokenHttpContextKey = "bot_token";
 
-    public static readonly JsonSerializerOptions SlackJsonSerializerOptions = new()
+    override protected Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request)
     {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
+        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
 
-    private async Task<IRequestResult> ApiCall(HttpRequestMessage request)
-    {
-        var result = await ApiCall<BaseResponse>(request);
-
-        return result.IsSuccesful switch
-        {
-            true => RequestResult.Success(),
-            false => RequestResult.Failure(result.Error!)
-        };
+        return base.ApiCall<T>(_httpClient, request, _logger);
     }
 
-    private Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : BaseResponse
+    override public async Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request, ILogger? logger)
     {
-        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", _httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
-
-        return ApiCall<T>(_httpClient, request, _logger);
-    }
-
-    public static Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request) where T : BaseResponse =>
-        ApiCall<T>(httpClient, request, null);
-
-    public static async Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request, ILogger? logger) where T : BaseResponse
-    {
-        var responseMessage = await httpClient.SendAsync(request);
-        responseMessage.EnsureSuccessStatusCode();
-        T result = (await responseMessage.Content.ReadFromJsonAsync<T>(SlackJsonSerializerOptions))!;
-
-        logger?.LogDebug("Slack Api response {HttpMethod} {RequestUri}:\n{ResponseMessage}",
-            request.Method,
-            request.RequestUri,
-            await responseMessage.Content.ReadAsStringAsync());
+        T result = (await base.ApiCall<T>(httpClient, request, logger)).Value!;
 
         if (!result.Ok)
         {
@@ -82,21 +48,21 @@ public class SlackClient(HttpClient httpClient,
     #region Chat
     public Task<IRequestResult<ChatPostMessageResponse>> ChatPostMessage(ChatPostMessageRequest message)
     {
-        string body = JsonSerializer.Serialize(message, SlackJsonSerializerOptions);
+        string body = JsonSerializer.Serialize(message, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall<ChatPostMessageResponse>(new(HttpMethod.Post, "chat.postMessage") { Content = content });
     }
 
     public Task<IRequestResult> ChatUpdateMessage(ChaUpdateMessageRequest message)
     {
-        string body = JsonSerializer.Serialize(message, SlackJsonSerializerOptions);
+        string body = JsonSerializer.Serialize(message, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "chat.update") { Content = content });
     }
 
     public Task<IRequestResult> ChatDeleteMessage(string channel, string timestamp)
     {
-        var body = JsonSerializer.Serialize(new { channel, ts = timestamp }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { channel, ts = timestamp }, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "chat.delete") { Content = content });
     }
@@ -115,28 +81,28 @@ public class SlackClient(HttpClient httpClient,
     #region Views
     public Task<IRequestResult> ViewOpen(string triggerId, ModalView modalView)
     {
-        var body = JsonSerializer.Serialize(new { triggerId, view = modalView }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { triggerId, view = modalView }, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.open") { Content = content });
     }
 
     public Task<IRequestResult> ViewPush(string triggerId, ModalView modalView)
     {
-        var body = JsonSerializer.Serialize(new { triggerId, view = modalView }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { triggerId, view = modalView }, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.push") { Content = content });
     }
 
     public Task<IRequestResult> ViewUpdate(string viewId, ModalView modalView)
     {
-        var body = JsonSerializer.Serialize(new { viewId, view = modalView }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { viewId, view = modalView }, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.update") { Content = content });
     }
 
     public Task<IRequestResult> ViewPublish(string user_id, HomeView homeView)
     {
-        var body = JsonSerializer.Serialize(new { user_id, view = homeView }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { user_id, view = homeView }, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "views.publish") { Content = content });
     }
@@ -170,7 +136,7 @@ public class SlackClient(HttpClient httpClient,
 
     public Task<IRequestResult> ConversationsSetTopic(string channel, string topic)
     {
-        var body = JsonSerializer.Serialize(new { channel, topic }, SlackJsonSerializerOptions);
+        var body = JsonSerializer.Serialize(new { channel, topic }, ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         return ApiCall(new(HttpMethod.Post, "conversations.setTopic") { Content = content });
     }

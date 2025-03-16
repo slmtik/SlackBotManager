@@ -1,4 +1,4 @@
-﻿using Slack.Models.SlackClient;
+﻿using Slack.DTO;
 using System.Text.Json.Serialization;
 
 namespace Slack.Interfaces;

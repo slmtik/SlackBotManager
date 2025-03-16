@@ -1,8 +1,8 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace Slack.Models.SlackClient;
+namespace Slack.DTO;
 
-public class ChatPostMessageResponse : BaseResponse
+public class ChatPostMessageResponse : SlackResponse
 {
     [JsonPropertyName("ts")]
     public string Timestamp { get; set; }

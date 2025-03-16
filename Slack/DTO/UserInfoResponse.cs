@@ -1,6 +1,6 @@
-﻿namespace Slack.Models.SlackClient;
+﻿namespace Slack.DTO;
 
-public class UserInfoResponse : BaseResponse
+public class UserInfoResponse : SlackResponse
 {
     public User User { get; set; }
 }

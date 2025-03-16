@@ -1,6 +1,4 @@
-﻿using Slack.Interfaces;
-
-namespace Slack.Models;
+﻿namespace Core.ApiClient;
 
 public class RequestResult : IRequestResult
 {

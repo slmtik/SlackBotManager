@@ -1,7 +1,7 @@
 ﻿using Slack.Interfaces;
 using System.Text.Json.Serialization;
 
-namespace Slack.Models.SlackClient;
+namespace Slack.DTO;
 
 public class ErrorSubmissionResponse : ISubmissionResponse
 {

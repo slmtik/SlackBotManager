@@ -1,4 +1,4 @@
-﻿namespace Slack.Interfaces;
+﻿namespace Core.ApiClient;
 
 public interface IRequestResult
 {

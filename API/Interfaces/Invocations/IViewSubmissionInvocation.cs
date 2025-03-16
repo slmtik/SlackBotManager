@@ -1,5 +1,5 @@
-﻿using Slack;
-using Slack.Interfaces;
+﻿using Core.ApiClient;
+using Slack;
 using Slack.Models.Payloads;
 
 namespace API.Interfaces.Invocations;

@@ -38,6 +38,6 @@ public record Installation : StoreItemBase
     public string? TokenType { get; set; }
     public long? BotTokenExpiresAt { get; set; }
     public string? CustomValues { get; set; }
-    public string InstalledAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+    public string InstalledAt { get; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
     public long? UserTokenExpiresAt { get; set; }
 }

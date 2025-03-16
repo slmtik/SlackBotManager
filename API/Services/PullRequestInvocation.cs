@@ -1,14 +1,14 @@
 ﻿using API.Interfaces.Invocations;
+using Core.ApiClient;
 using Persistence.Interfaces;
 using Slack;
+using Slack.DTO;
 using Slack.Interfaces;
-using Slack.Models;
 using Slack.Models.Blocks;
 using Slack.Models.Commands;
 using Slack.Models.Elements;
 using Slack.Models.ElementStates;
 using Slack.Models.Payloads;
-using Slack.Models.SlackClient;
 using Slack.Models.Views;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -54,7 +54,7 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
             {
                 Reviewing = json["reviewing"].Deserialize<List<string>>(),
                 Approved = json["approved"].Deserialize<List<string>>(),
-                UserProfiles = json["user_profiles"].Deserialize<Dictionary<string, Profile>>(SlackClient.SlackJsonSerializerOptions)
+                UserProfiles = json["user_profiles"].Deserialize<Dictionary<string, Profile>>(SlackClient.ApiJsonSerializerOptions)
             };
         }
     }
@@ -263,7 +263,7 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
         ViewMetadata viewMetadata = JsonSerializer.Deserialize<ViewMetadata>(payload.View.PrivateMetadata)!;
 
         if (payload.View.State.Values["branches"]["multi_static_select"] is MultiStaticSelectState multiStaticSelectState)
-            viewMetadata.Branches = (multiStaticSelectState.SelectedOptions ?? []).Select(so => so.Value).ToList();
+            viewMetadata.Branches = [.. (multiStaticSelectState.SelectedOptions ?? []).Select(so => so.Value)];
 
         if (payload.View.State.Values["issues"]["number_input"] is NumberInputState numberInputState)
             viewMetadata.IssuesNumber = int.Parse(numberInputState.Value);

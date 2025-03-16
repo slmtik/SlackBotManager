@@ -23,7 +23,6 @@ builder.Services.AddScoped<IOAuthStateStore, FileOAuthStateStore>();
 builder.Services.AddScoped<IInstallationStore, FileInstallationStore>();
 builder.Services.AddScoped<ISettingStore, FileSettingStore>();
 builder.Services.AddScoped<IQueueStateStore, FileQueueStateStore>();
-builder.Services.AddTransient<AuthorizationUrlGenerator>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PullRequestInvocation>();
 builder.Services.AddScoped<IInvocation, PullRequestInvocation>(sp => sp.GetRequiredService<PullRequestInvocation>());
@@ -32,7 +31,7 @@ builder.Services.AddScoped<IInvocation, HomeTabInvocation>(sp =>
                           sp.GetRequiredService<QueueStateManager>(),
                           sp.GetRequiredService<PullRequestInvocation>())
 );
-builder.Services.AddTransient<SlackMessageManager>();
+builder.Services.AddTransient<SlackManager>();
 builder.Services.AddTransient<QueueStateManager>();
 builder.Services.AddTransient<SlackTokenRotator>();
 builder.Services.AddHostedService<ReviewReminderWorker>();

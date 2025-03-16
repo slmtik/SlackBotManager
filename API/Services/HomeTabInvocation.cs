@@ -5,12 +5,12 @@ using Slack;
 using Slack.Interfaces;
 using Slack.Models.ElementStates;
 using Slack.Models.Views;
-using Slack.Models;
 using API.Interfaces.Invocations;
 using Slack.Models.Payloads;
 using Slack.Models.Events;
 using Slack.Models.Blocks;
 using Slack.Models.Commands;
+using Core.ApiClient;
 
 namespace API.Services;
 
@@ -24,12 +24,13 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
     public Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task<IRequestResult>>> BlockActionsBindings { get; } = [];
     public Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task<IRequestResult>>> ViewSubmissionBindings { get; } = [];
 
-    public HomeTabInvocation(ISettingStore settingStore, QueueStateManager queueStateManager, ICommandInvocation createPullRequestInvocation)
+    public HomeTabInvocation(ISettingStore settingStore, 
+                             QueueStateManager queueStateManager, 
+                             ICommandInvocation createPullRequestInvocation)
     {
         _settingStore = settingStore;
         _queueStateManager = queueStateManager;
         _createPullRequestInvocation = createPullRequestInvocation;
-
         EventBindings.Add("app_home_opened", SendHomeTab);
 
         BlockActionsBindings.Add(("channel_to_post", "select"), SetChannelToPost);
@@ -78,7 +79,116 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
 
         if (isAppAdmin)
         {
-            blocks.AddRange(
+            CreateMainAdminSettingsBlocks(blocks, setting);
+            await CreatePullRequestAllowanceBlocks(blocks);
+            await CreateRemoveCreationMessageBlocks(blocks);
+            CreateEditFieldsBlocks(setting, blocks);
+            CreateReminderSettingBlocks(blocks);
+        }
+
+        if (validationMessages != null)
+        {
+            foreach (var (BlockId, Message) in validationMessages)
+            {
+                var blockToValidateIndex = blocks.FindIndex(b => b.BlockId == BlockId) + 1;
+                blocks.Insert(blockToValidateIndex, new ContextBlock([new MarkdownText($":warning: {Message}")]) { BlockId = $"validation_{BlockId}" });
+            }
+        }
+
+        return new(blocks);
+    }
+
+    private void CreateReminderSettingBlocks(List<IBlock> blocks)
+    {
+        blocks.AddRange(
+            [
+                new DividerBlock(),
+                new SectionBlock(new MarkdownText("Reminder settings"))
+                {
+                    BlockId = "reminder",
+                    Accessory = new Button("Setup reminder logic")
+                    {
+                        ActionId = "settings"
+                    }
+                }
+            ]);
+    }
+
+    private static void CreateEditFieldsBlocks(Setting setting, List<IBlock> blocks)
+    {
+        blocks.AddRange(
+            [
+                new DividerBlock(),
+                new SectionBlock(new MarkdownText($"Branches: {string.Join(", ", setting.Branches.Select(b => $"`{b}`") ?? [])}"))
+                {
+                    BlockId = "branches",
+                    Accessory = new Button("Edit branches")
+                    {
+                        ActionId = "edit"
+                    }
+                },
+                new SectionBlock(new MarkdownText($"Tags: {string.Join(", ", setting.Tags.Select(b => $"`{b}`") ?? [])}"))
+                {
+                    BlockId = "tags",
+                    Accessory = new Button("Edit tags")
+                    {
+                        ActionId = "edit"
+                    }
+                },
+            ]);
+    }
+
+    private async Task CreateRemoveCreationMessageBlocks(List<IBlock> blocks)
+    {
+        if (string.IsNullOrEmpty((await _queueStateManager.GetReviewInCreation())?.MessageTimestamp))
+        {
+            return;
+        }
+
+        blocks.AddRange(
+            [
+                new DividerBlock(),
+                new SectionBlock("In case creation message stucked, you can remove it")
+                {
+                    BlockId = "creation_message",
+                    Accessory = new Button("Remove creation message")
+                    {
+                        ActionId = "remove",
+                        Confirm = new("Remove the creation message", "You are going to remove the creation message. Please confirm", "Remove", "Cancel")
+                    }
+                },
+            ]);
+    }
+
+    private async Task CreatePullRequestAllowanceBlocks(List<IBlock> blocks)
+    {
+        string allowancePrefix;
+        if (await _queueStateManager.IsCreationAllowed())
+            allowancePrefix = "Disallow";
+        else
+            allowancePrefix = "Allow";
+
+        blocks.AddRange(
+            [
+                new DividerBlock(),
+                new SectionBlock("Manage the allowance of creation pull requests")
+                {
+                    BlockId = "pull_requests_creation",
+                    Accessory = new Button($"{allowancePrefix} creation")
+                    {
+                        ActionId = allowancePrefix.ToLower(),
+                        Confirm = new($"{allowancePrefix}ing to create pull requests",
+                                        $"You are going to {allowancePrefix.ToLower()} the creation of pull requests. Please confirm",
+                                        allowancePrefix,
+                                        "Cancel")
+                    }
+                },
+            ]);
+    }
+
+    private static void CreateMainAdminSettingsBlocks(List<IBlock> blocks, Setting setting)
+    {
+        blocks.AddRange(
             [
                 new DividerBlock(),
                 new HeaderBlock("Administrator settings:"),
@@ -104,92 +214,6 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
                     }
                 },
             ]);
-
-            string allowancePrefix;
-            if (await _queueStateManager.IsCreationAllowed())
-                allowancePrefix = "Disallow";
-            else
-                allowancePrefix = "Allow";
-
-            blocks.AddRange(
-                [
-                    new DividerBlock(),
-                    new SectionBlock("Manage the allowance of creation pull requests")
-                    {
-                        BlockId = "pull_requests_creation",
-                        Accessory = new Button($"{allowancePrefix} creation")
-                        {
-                            ActionId = allowancePrefix.ToLower(),
-                            Confirm = new($"{allowancePrefix}ing to create pull requests",
-                                          $"You are going to {allowancePrefix.ToLower()} the creation of pull requests. Please confirm",
-                                          allowancePrefix,
-                                          "Cancel")
-                        }
-                    },
-                ]);
-
-            if (!string.IsNullOrEmpty((await _queueStateManager.GetReviewInCreation())?.MessageTimestamp))
-            {
-                blocks.AddRange(
-                [
-                    new DividerBlock(),
-                    new SectionBlock("In case creation message stucked, you can remove it")
-                    {
-                        BlockId = "creation_message",
-                        Accessory = new Button("Remove creation message")
-                        {
-                            ActionId = "remove",
-                            Confirm = new("Remove the creation message", "You are going to remove the creation message. Please confirm", "Remove", "Cancel")
-                        }
-                    },
-                ]);
-            }
-
-            blocks.AddRange(
-            [
-                new DividerBlock(),
-                new SectionBlock(new MarkdownText($"Branches: {string.Join(", ", setting.Branches.Select(b => $"`{b}`") ?? [])}"))
-                {
-                    BlockId = "branches",
-                    Accessory = new Button("Edit branches")
-                    {
-                        ActionId = "edit"
-                    }
-                },
-                new SectionBlock(new MarkdownText($"Tags: {string.Join(", ", setting.Tags.Select(b => $"`{b}`") ?? [])}"))
-                {
-                    BlockId = "tags",
-                    Accessory = new Button("Edit tags")
-                    {
-                        ActionId = "edit"
-                    }
-                },
-            ]);
-
-            blocks.AddRange(
-            [
-                new DividerBlock(),
-                new SectionBlock(new MarkdownText("Reminder settings"))
-                {
-                    BlockId = "reminder",
-                    Accessory = new Button("Setup reminder logic")
-                    {
-                        ActionId = "settings"
-                    }
-                }
-            ]);
-        }
-
-        if (validationMessages != null)
-        {
-            foreach (var (BlockId, Message) in validationMessages)
-            {
-                var blockToValidateIndex = blocks.FindIndex(b => b.BlockId == BlockId) + 1;
-                blocks.Insert(blockToValidateIndex, new ContextBlock([new MarkdownText($":warning: {Message}")]) { BlockId = $"validation_{BlockId}" });
-            }
-        }
-
-        return new(blocks);
     }
 
     private async Task<IRequestResult> CreatePullRequest(SlackClient client, BlockActionsPayload payload)

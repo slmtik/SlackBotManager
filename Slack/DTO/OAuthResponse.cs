@@ -1,8 +1,6 @@
-﻿using Slack.Models.SlackClient;
+﻿namespace Slack.DTO;
 
-namespace Slack.Models.SlackClient;
-
-public class OAuthResponse : BaseResponse
+public class OAuthResponse : SlackResponse
 {
     public Enterprise? Enterprise { get; set; }
     public bool IsEnterpriseInstall { get; set; }

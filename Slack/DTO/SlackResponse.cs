@@ -1,6 +1,8 @@
-﻿namespace Slack.Models.SlackClient;
+﻿using Core.ApiClient;
 
-public class BaseResponse
+namespace Slack.DTO;
+
+public class SlackResponse: BaseResponse
 {
     public bool Ok { get; set; }
     public string? Error { get; set; }

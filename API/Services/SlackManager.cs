@@ -3,19 +3,20 @@ using Persistence.Models;
 using Persistence.Interfaces;
 using Slack;
 using Slack.Interfaces;
-using Slack.Models;
 using API.Interfaces.Invocations;
 using Slack.Models.Events;
 using Slack.Models.Commands;
 using Slack.Models.Payloads;
+using Core.ApiClient;
 
 namespace API.Services;
 
-public class SlackMessageManager
+public class SlackManager
 {
     private readonly SlackClient _client;
     private readonly IInstallationStore _installationStore;
-    private readonly ILogger<SlackMessageManager> _logger;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<SlackManager> _logger;
 
     private readonly Dictionary<string, Func<SlackClient, Command, Task<IRequestResult>>> _commands = [];
     private readonly Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task<IRequestResult>>> _viewSubmissionInteractions = [];
@@ -23,13 +24,15 @@ public class SlackMessageManager
     private readonly Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task<IRequestResult>>> _blockActionsInteractions = [];
     private readonly Dictionary<string, Func<SlackClient, EventPayload, Task>> _events = [];
 
-    public SlackMessageManager(SlackClient client,
-                               IInstallationStore installationStore,
-                               IEnumerable<IInvocation> invocations,
-                               ILogger<SlackMessageManager> logger)
+    public SlackManager(SlackClient client,
+                        IInstallationStore installationStore,
+                        IEnumerable<IInvocation> invocations,
+                        IConfiguration configuration,
+                        ILogger<SlackManager> logger)
     {
         _client = client;
         _installationStore = installationStore;
+        _configuration = configuration;
         _logger = logger;
         AddInvocation(invocations);
     }
@@ -72,7 +75,7 @@ public class SlackMessageManager
 
     public Task<IRequestResult> HandleInteractionPayload(string payloadString)
     {
-        var payload = JsonSerializer.Deserialize<IInteractionPayload>(payloadString, SlackClient.SlackJsonSerializerOptions);
+        var payload = JsonSerializer.Deserialize<IInteractionPayload>(payloadString, SlackClient.ApiJsonSerializerOptions);
 
         if (payload is BlockActionsPayload blockActionsPayload)
             return HandleBlockActionsPayload(blockActionsPayload);
@@ -127,6 +130,17 @@ public class SlackMessageManager
         return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested block action interaction is not handled yet."));
     }
 
+    public string GenerateOAuthURL(string state)
+    {
+        var clientId = _configuration["Slack:ClientId"];
+        var scopes = string.Join(",", _configuration.GetSection("Slack:Scopes").Get<string[]?>() ?? []);
+        var userScopes = string.Join(",", _configuration.GetSection("Slack:UserScopes").Get<string[]?>() ?? []);
+
+        var queryParams = string.Join("&", $"state={state}", $"client_id={clientId}", $"scope={scopes}", $"user_scope={userScopes}");
+
+        return $"https://slack.com/oauth/v2/authorize?{queryParams}";
+    }
+
     public async Task<IRequestResult<Installation>> ProcessOauthCallback(string code)
     {
         var oAuthResult = await _client.OAuthV2Success(new() { Code = code });
@@ -134,9 +148,9 @@ public class SlackMessageManager
 
         string? botId = null;
         string? enterpriseUrl = null;
-        if (oAuthResult.IsSuccesful && !string.IsNullOrEmpty(oAuthData.AccessToken))
+        if (oAuthResult.IsSuccesful)
         {
-            var authTestResult = await _client.AuthTest(oAuthData.AccessToken);
+            var authTestResult = await _client.AuthTest(oAuthResult.Value.AccessToken);
             botId = authTestResult.Value.BotId;
 
             if (oAuthData.IsEnterpriseInstall)
@@ -157,10 +171,6 @@ public class SlackMessageManager
             BotScopes = oAuthData.Scope,
             BotRefreshToken = oAuthData.RefreshToken,
             BotTokenExpiresIn = oAuthData.ExpiresIn,
-            UserToken = oAuthData.AuthedUser?.AccessToken,
-            UserScopes = oAuthData.AuthedUser?.Scope,
-            UserRefreshToken = oAuthData.AuthedUser?.RefreshToken,
-            UserTokenExpiresIn = oAuthData.AuthedUser?.ExpiresIn,
             IsEnterpriseInstall = oAuthData.IsEnterpriseInstall,
             TokenType = oAuthData.TokenType
         };

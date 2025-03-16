@@ -9,15 +9,11 @@ namespace API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class SlackController(SlackMessageManager slackMessageManager,
-                             AuthorizationUrlGenerator authorizationUrlGenerator,
+public class SlackController(SlackManager slackManager,
                              IOAuthStateStore oAuthStateStore,
                              IHostEnvironment hostEnvironment) : ControllerBase
 {
-    private const string _routeToOAuthStart = "/api/slack/install";
-
-    private readonly SlackMessageManager _slackMessageManager = slackMessageManager;
-    private readonly AuthorizationUrlGenerator _authorizationUrlGenerator = authorizationUrlGenerator;
+    private readonly SlackManager _slackManager = slackManager;
     private readonly IOAuthStateStore _oAuthStateStore = oAuthStateStore;
     private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
 
@@ -31,7 +27,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
 
         slackCommand.CommandText = $"/{slackCommand.CommandText[commandPrefix.Length..]}";
 
-        var requestResult = await _slackMessageManager.HandleCommand(slackCommand);
+        var requestResult = await _slackManager.HandleCommand(slackCommand);
 
         if (!requestResult.IsSuccesful)
             return Ok(requestResult.Error);
@@ -42,7 +38,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
     [Route("interactions")]
     public async Task<ActionResult> HandleInteractions([FromForm] string payload)
     {
-        var requestResult = await _slackMessageManager.HandleInteractionPayload(payload);
+        var requestResult = await _slackManager.HandleInteractionPayload(payload);
 
         if (!requestResult.IsSuccesful)
         {
@@ -63,16 +59,16 @@ public class SlackController(SlackMessageManager slackMessageManager,
     [Route("events")]
     public async Task<ActionResult> HandleEvents(EventPayload payload)
     {
-        await _slackMessageManager.HandleEventPayload(payload);
+        await _slackManager.HandleEventPayload(payload);
         return Ok();
     }
 
     [HttpGet]
-    [Route("install")]
+    [Route("install", Name="SlackOAuthInstall")]
     public ContentResult OAuthStart()
     {
         var state = _oAuthStateStore.Issue();
-        var url = _authorizationUrlGenerator.Generate(state);
+        var url = _slackManager.GenerateOAuthURL(state);
 
         return base.Content($@"
             <html>
@@ -95,19 +91,19 @@ public class SlackController(SlackMessageManager slackMessageManager,
         if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(state))
         {
             if (!_oAuthStateStore.Consume(state))
-                return base.Content(RenderFailurePage("the state value is already expired"), "text/html");
+                return base.Content(RenderFailurePage(Url.Link("OAuthInstall", null), "the state value is already expired"), "text/html");
 
-            var result = await _slackMessageManager.ProcessOauthCallback(code);
+            var result = await _slackManager.ProcessOauthCallback(code);
 
-            if (result.IsSuccesful)
+            if (result.IsSuccesful && result.Value is not null)
                 return base.Content(RenderSuccessPage(result.Value.AppId, result.Value.TeamId, result.Value.IsEnterpriseInstall, result.Value.EnterpriseUrl),
                                     "text/html");
 
         }
-        return base.Content(RenderFailurePage(error), "text/html");
+        return base.Content(RenderFailurePage(Url.Link("SlackOAuthInstall", null), error), "text/html");
     }
 
-    private static string RenderFailurePage(string? error)
+    private static string RenderFailurePage(string? oAuthInstallUrl, string? error)
     {
         return $@"
             <html>
@@ -122,7 +118,7 @@ public class SlackController(SlackMessageManager slackMessageManager,
                 </head>
                 <body>
                     <h2>Oops, Something Went Wrong!</h2>
-                    <p>Please try again from <a href=""{_routeToOAuthStart}"">here</a> or contact the app owner (reason: {error})</p>
+                    <p>Please try again from <a href=""{oAuthInstallUrl}"">here</a> or contact the app owner (reason: {error})</p>
                 </body>
             </html>";
     }

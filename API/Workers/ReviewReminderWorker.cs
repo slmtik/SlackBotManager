@@ -6,13 +6,12 @@ using Persistence.Models;
 using Persistence.FileStores;
 using Slack;
 using API.Services;
-using Slack.Interfaces;
-using Slack.Models.SlackClient;
-using Slack.Models;
+using Slack.DTO;
+using Core.ApiClient;
 
 namespace API.Workers;
 
-public class ReviewReminderWorker : BackgroundService
+public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpClientFactory httpClientFactory, IServiceProvider serviceProvider) : BackgroundService
 {
     private record ReviewReminder
     {
@@ -37,28 +36,17 @@ public class ReviewReminderWorker : BackgroundService
         }
     }
 
-    private readonly ILogger<ReviewReminderWorker> _logger;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IServiceProvider _serviceProvider;
-
     private readonly Dictionary<InstanceData, ReviewReminder> _reminderMessages = [];
 
     public const string HttpClientName = "SlackClientForWorker";
-
-    public ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpClientFactory httpClientFactory, IServiceProvider serviceProvider)
-    {
-        _logger = logger;
-        _httpClientFactory = httpClientFactory;
-        _serviceProvider = serviceProvider;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            using IServiceScope serviceScope = _serviceProvider.CreateScope();
+            using IServiceScope serviceScope = serviceProvider.CreateScope();
             var queueStateStore = serviceScope.ServiceProvider.GetRequiredService<IQueueStateStore>();
-            var slackClient = _httpClientFactory.CreateClient(HttpClientName);
+            var slackClient = httpClientFactory.CreateClient(HttpClientName);
 
             foreach (var instanceQueue in (await ((FileStoreBase<QueueState>)queueStateStore).FindAll())
                                                  .Where(q => q.ReviewQueue.Count > 0)
@@ -115,16 +103,30 @@ public class ReviewReminderWorker : BackgroundService
     private async Task<IRequestResult> SlackPostMessage(HttpClient slackClient, string botToken, string channelId, string messageText)
     {
         var message = new ChatPostMessageRequest(channelId, messageText);
-        string body = JsonSerializer.Serialize(message, SlackClient.SlackJsonSerializerOptions);
+        string body = JsonSerializer.Serialize(message, SlackClient.ApiJsonSerializerOptions);
         StringContent content = new(body, Encoding.UTF8, "application/json");
         HttpRequestMessage reminderRequest = new(HttpMethod.Post, "chat.postMessage") { Content = content };
         reminderRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", botToken);
 
-        var response = await SlackClient.ApiCall<ChatPostMessageResponse>(slackClient, reminderRequest, _logger);
-        return response.IsSuccesful switch
+        var response = await slackClient.SendAsync(reminderRequest);
+        response.EnsureSuccessStatusCode();
+        ChatPostMessageResponse result = (await response.Content.ReadFromJsonAsync<ChatPostMessageResponse>(SlackClient.ApiJsonSerializerOptions))!;
+
+        logger?.LogDebug("API response {HttpMethod} {RequestUri}:\n{ResponseMessage}",
+            reminderRequest.Method,
+            reminderRequest.RequestUri,
+            await response.Content.ReadAsStringAsync());
+
+        if (!result.Ok)
         {
-            true => RequestResult.Success(),
-            false => RequestResult.Failure(response.Error)
-        };
+            logger?.LogError("Slack API error {HttpMethod} {RequestUri} {SlackError}\n{ResponseMetadata}",
+                             reminderRequest.Method,
+                             reminderRequest.RequestUri,
+                             result.Error,
+                             string.Join("\n", result.ResponseMetadata?.Messages ?? []));
+            return RequestResult<ChatPostMessageResponse>.Failure(result.Error ?? string.Empty);
+        }
+
+        return RequestResult<ChatPostMessageResponse>.Success(result);
     }
 }

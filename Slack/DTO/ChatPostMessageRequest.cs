@@ -2,9 +2,9 @@
 using Slack.Models.Payloads;
 using System.Text.Json.Serialization;
 
-namespace Slack.Models.SlackClient;
+namespace Slack.DTO;
 
-public class ChaUpdateMessageRequest
+public class ChatPostMessageRequest
 {
     public string? Text { get; set; }
     public IEnumerable<IBlock>? Blocks { get; set; }
@@ -13,20 +13,18 @@ public class ChaUpdateMessageRequest
     public string ChannelId { get; set; }
     public bool? UnfurlLinks { get; set; }
     public Metadata? Metadata { get; set; }
-    [JsonPropertyName("ts")]
-    public string Timestamp { get; set; }
+    [JsonPropertyName("thread_ts")]
+    public string? ThreadTimestamp { get; set; }
 
-    public ChaUpdateMessageRequest(string channelId, string timestamp, string text)
+    public ChatPostMessageRequest(string channelId, string text)
     {
         ChannelId = channelId;
-        Timestamp = timestamp;
         Text = text;
     }
 
-    public ChaUpdateMessageRequest(string channelId, string timestamp, IEnumerable<IBlock> blocks)
+    public ChatPostMessageRequest(string channelId, IEnumerable<IBlock> blocks)
     {
         ChannelId = channelId;
-        Timestamp = timestamp;
         Blocks = blocks;
     }
 }
