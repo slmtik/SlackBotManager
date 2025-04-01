@@ -15,17 +15,17 @@ public class InstallationTokenVerifier(RequestDelegate next)
     public async Task InvokeAsync(HttpContext context, IInstallationStore installationStore, SlackTokenRotator slackTokenRotator)
     {
         context.Request.EnableBuffering();
-        string rawBody = await context.Request.BodyReader.GetStringFromPipe();
+        string body = await context.Request.BodyReader.GetStringFromPipe();
         context.Request.Body.Position = 0;
 
-        if (IsChallengeRequest(rawBody, context.Request.Headers.ContentType.ToString(), out var challenge))
+        if (IsChallengeRequest(body, context.Request.Headers.ContentType.ToString(), out var challenge))
         {
             context.Response.StatusCode = (int)HttpStatusCode.OK;
             await context.Response.WriteAsync(challenge);
             return;
         }
 
-        var instanceData = ParseBody(rawBody, context.Request.Headers.ContentType.ToString());
+        var instanceData = ParseBody(body, context.Request.Headers.ContentType.ToString());
 
         if (!await slackTokenRotator.RotateToken(instanceData))
         {

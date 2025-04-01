@@ -2,7 +2,7 @@
 
 public class UserInfoResponse : SlackResponse
 {
-    public User User { get; set; }
+    public required User User { get; set; }
 }
 
 public class User

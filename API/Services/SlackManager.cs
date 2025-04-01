@@ -1,8 +1,4 @@
-﻿using System.Text.Json;
-using Persistence.Models;
-using Persistence.Interfaces;
-using Slack;
-using Slack.Interfaces;
+﻿using Slack.Interfaces;
 using API.Interfaces.Invocations;
 using Slack.Models.Events;
 using Slack.Models.Commands;
@@ -13,26 +9,17 @@ namespace API.Services;
 
 public class SlackManager
 {
-    private readonly SlackClient _client;
-    private readonly IInstallationStore _installationStore;
-    private readonly IConfiguration _configuration;
     private readonly ILogger<SlackManager> _logger;
 
-    private readonly Dictionary<string, Func<SlackClient, Command, Task<IRequestResult>>> _commands = [];
-    private readonly Dictionary<string, Func<SlackClient, ViewSubmissionPayload, Task<IRequestResult>>> _viewSubmissionInteractions = [];
-    private readonly Dictionary<string, Func<SlackClient, ViewClosedPayload, Task<IRequestResult>>> _viewClosedInteractions = [];
-    private readonly Dictionary<(string BlockId, string ActionId), Func<SlackClient, BlockActionsPayload, Task<IRequestResult>>> _blockActionsInteractions = [];
-    private readonly Dictionary<string, Func<SlackClient, EventPayload, Task>> _events = [];
+    private readonly Dictionary<string, Func<Command, Task<IRequestResult>>> _commands = [];
+    private readonly Dictionary<string, Func<ViewSubmissionPayload, Task<IRequestResult>>> _viewSubmissionInteractions = [];
+    private readonly Dictionary<string, Func<ViewClosedPayload, Task<IRequestResult>>> _viewClosedInteractions = [];
+    private readonly Dictionary<(string? BlockId, string? ActionId), Func<BlockActionsPayload, Task<IRequestResult>>> _blockActionsInteractions = [];
+    private readonly Dictionary<string, Func<EventPayload, Task<IRequestResult>>> _events = [];
 
-    public SlackManager(SlackClient client,
-                        IInstallationStore installationStore,
-                        IEnumerable<IInvocation> invocations,
-                        IConfiguration configuration,
+    public SlackManager(IEnumerable<IInvocation> invocations,
                         ILogger<SlackManager> logger)
     {
-        _client = client;
-        _installationStore = installationStore;
-        _configuration = configuration;
         _logger = logger;
         AddInvocation(invocations);
     }
@@ -42,83 +29,84 @@ public class SlackManager
         foreach (var invocation in invocations)
         {
             if (invocation is ICommandInvocation commandInteraction)
-                foreach (var binding in commandInteraction.CommandBindings)
-                    _commands.Add(binding.Key, binding.Value);
+                AddBindings(_commands, commandInteraction.CommandBindings);
 
             if (invocation is IViewSubmissionInvocation viewSubmissionInteraction)
-                foreach (var binding in viewSubmissionInteraction.ViewSubmissionBindings)
-                    _viewSubmissionInteractions.Add(binding.Key, binding.Value);
+                AddBindings(_viewSubmissionInteractions, viewSubmissionInteraction.ViewSubmissionBindings);
 
             if (invocation is IViewClosedInvocation viewClosedInteraction)
-                foreach (var binding in viewClosedInteraction.ViewClosedBindings)
-                    _viewClosedInteractions.Add(binding.Key, binding.Value);
+                AddBindings(_viewClosedInteractions, viewClosedInteraction.ViewClosedBindings);
 
             if (invocation is IBlockActionsInvocation blockActionsInteraction)
-                foreach (var binding in blockActionsInteraction.BlockActionsBindings)
-                    _blockActionsInteractions.Add(binding.Key, binding.Value);
+                AddBindings(_blockActionsInteractions, blockActionsInteraction.BlockActionsBindings);
 
             if (invocation is IEventInvocation eventInvocation)
-                foreach (var binding in eventInvocation.EventBindings)
-                    _events.Add(binding.Key, binding.Value);
+                AddBindings(_events, eventInvocation.EventBindings);
         }
     }
 
-    public Task<IRequestResult> HandleCommand(Command slackCommand)
+    private static void AddBindings<TKey, TValue>(Dictionary<TKey, TValue> target, IDictionary<TKey, TValue> bindings) where TKey : notnull
     {
-        if (_commands.TryGetValue(slackCommand.CommandText, out var commandHandler))
-            return _commands[slackCommand.CommandText].Invoke(_client, slackCommand);
-
-        _logger.LogWarning("The requested command is not handled yet. Command: {Command}", slackCommand.CommandText);
-
-        return Task.FromResult<IRequestResult>(RequestResult.Failure("Command is not handled yet"));
+        foreach (var binding in bindings)
+        {
+            target[binding.Key] = binding.Value;
+        }
     }
 
-    public Task<IRequestResult> HandleInteractionPayload(string payloadString)
+    private Task<IRequestResult> HandleInteraction<TKey, TPayload>(TKey key, IDictionary<TKey, Func<TPayload, Task<IRequestResult>>> handlers,
+        TPayload payload, string interactionType, System.Action? customLogger = null)
     {
-        var payload = JsonSerializer.Deserialize<IInteractionPayload>(payloadString, SlackClient.ApiJsonSerializerOptions);
+        if (handlers.TryGetValue(key, out var handler))
+            return handler.Invoke(payload);
 
-        if (payload is BlockActionsPayload blockActionsPayload)
-            return HandleBlockActionsPayload(blockActionsPayload);
-        else if (payload is ViewSubmissionPayload viewSubmissionPayload)
-            return HandleViewSubmissionPayload(viewSubmissionPayload);
-        else if (payload is ViewClosedPayload viewClosedPayload)
-            return HandleViewClosedPayload(viewClosedPayload);
+        if (customLogger != null)
+        {
+            customLogger.Invoke();
+        }
+        else
+        {
+            _logger.LogWarning($"The requested {interactionType.ToLower()} interaction is not handled yet. ({interactionType}: {{Key}})", key);
+        }
 
-        return Task.FromResult<IRequestResult>(RequestResult.Failure("Payload type is not supported or empty"));
+        return Task.FromResult<IRequestResult>(RequestResult.Failure($"The requested {interactionType} interaction is not handled yet."));
     }
 
-    public Task HandleEventPayload(EventPayload payload)
-    {
-        if (_events.TryGetValue(payload.Event.Type, out var eventHandler))
-            return eventHandler.Invoke(_client, payload);
+    public Task<IRequestResult> HandleCommand(Command slackCommand) =>
+        HandleInteraction(slackCommand.CommandText, _commands, slackCommand, "Command");
 
-        _logger.LogWarning("The requested event interaction is not handled yet. " +
-                           "(EventType: {EventType})",
-                           payload.Event.Type);
+    public Task<IRequestResult> HandleEventPayload(EventPayload payload) =>
+        HandleInteraction(payload.Event.Type, _events, payload, "Event");
 
-        return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested event interaction is not handled yet."));
-    }
-
-    private Task<IRequestResult> HandleViewSubmissionPayload(ViewSubmissionPayload payload)
-    {
-        if (_viewSubmissionInteractions.TryGetValue(payload.View.CallbackId, out var bloackActionsInteractionHandler))
-            return bloackActionsInteractionHandler.Invoke(_client, payload);
-
-        _logger.LogWarning("The requested view submission interaction is not handled yet. " +
-                           "(ViewType: {ViewType}, ViewCallbackId: {CallbackId})",
-                           payload.View.Type,
-                           payload.View.CallbackId);
-
-        return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested view submission interaction is not handled yet."));
-    }
-
-    private Task<IRequestResult> HandleViewClosedPayload(ViewClosedPayload payload) =>
-        _viewClosedInteractions[payload.View.CallbackId].Invoke(_client, payload);
+    public Task<IRequestResult> HandleInteractionPayload(IInteractionPayload payload) =>
+        payload switch
+        {
+            BlockActionsPayload blockActionsPayload => HandleBlockActionsPayload(blockActionsPayload),
+            ViewSubmissionPayload viewSubmissionPayload =>
+                HandleInteraction(viewSubmissionPayload.View.CallbackId, _viewSubmissionInteractions, viewSubmissionPayload, "view submission",
+                    () => _logger.LogWarning("The requested view submission interaction is not handled yet. " +
+                                             "(ViewType: {ViewType}, ViewCallbackId: {CallbackId})",
+                                             viewSubmissionPayload.View.Type,
+                                             viewSubmissionPayload.View.CallbackId)),
+            ViewClosedPayload viewClosedPayload => HandleInteraction(viewClosedPayload.View.CallbackId, _viewClosedInteractions, viewClosedPayload, "View close"),
+            _ => Task.FromResult<IRequestResult>(RequestResult.Failure("Payload type is not supported or empty"))
+        };
 
     private Task<IRequestResult> HandleBlockActionsPayload(BlockActionsPayload payload)
     {
-        if (_blockActionsInteractions.TryGetValue((payload.Actions.First().BlockId, payload.Actions.First().ActionId), out var bloackActionsInteractionHandler))
-            return bloackActionsInteractionHandler.Invoke(_client, payload);
+        var actionKeys = new List<(string? BlockId, string? ActionId)>
+        {
+            (payload.Actions.First().BlockId, payload.Actions.First().ActionId),
+            (payload.Actions.First().BlockId, null),
+            (null, payload.Actions.First().ActionId)
+        };
+
+        foreach (var actionKey in actionKeys)
+        {
+            if (_blockActionsInteractions.TryGetValue(actionKey, out var interactionHandler))
+            {
+                return interactionHandler.Invoke(payload);
+            }
+        }
 
         _logger.LogWarning("The requested block action interaction is not handled yet. " +
                            "(ViewType: {ViewType}, ViewCallbackId: {CallbackId}, BlockId: {BlockId}, ActionId: {ActionId})",
@@ -128,54 +116,5 @@ public class SlackManager
                            payload.Actions.First().ActionId);
 
         return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested block action interaction is not handled yet."));
-    }
-
-    public string GenerateOAuthURL(string state)
-    {
-        var clientId = _configuration["Slack:ClientId"];
-        var scopes = string.Join(",", _configuration.GetSection("Slack:Scopes").Get<string[]?>() ?? []);
-        var userScopes = string.Join(",", _configuration.GetSection("Slack:UserScopes").Get<string[]?>() ?? []);
-
-        var queryParams = string.Join("&", $"state={state}", $"client_id={clientId}", $"scope={scopes}", $"user_scope={userScopes}");
-
-        return $"https://slack.com/oauth/v2/authorize?{queryParams}";
-    }
-
-    public async Task<IRequestResult<Installation>> ProcessOauthCallback(string code)
-    {
-        var oAuthResult = await _client.OAuthV2Success(new() { Code = code });
-        var oAuthData = oAuthResult.Value;
-
-        string? botId = null;
-        string? enterpriseUrl = null;
-        if (oAuthResult.IsSuccesful)
-        {
-            var authTestResult = await _client.AuthTest(oAuthResult.Value.AccessToken);
-            botId = authTestResult.Value.BotId;
-
-            if (oAuthData.IsEnterpriseInstall)
-                enterpriseUrl = authTestResult.Value.Url;
-        }
-
-        var installation = new Installation()
-        {
-            AppId = oAuthData.AppId,
-            EnterpriseId = oAuthData.Enterprise?.Id,
-            EnterpriseName = oAuthData.Enterprise?.Name,
-            EnterpriseUrl = enterpriseUrl,
-            TeamId = oAuthData.Team?.Id,
-            TeamName = oAuthData.Team?.Name,
-            BotId = botId,
-            BotToken = oAuthData.AccessToken,
-            BotUserId = oAuthData.BotUserId,
-            BotScopes = oAuthData.Scope,
-            BotRefreshToken = oAuthData.RefreshToken,
-            BotTokenExpiresIn = oAuthData.ExpiresIn,
-            IsEnterpriseInstall = oAuthData.IsEnterpriseInstall,
-            TokenType = oAuthData.TokenType
-        };
-        await _installationStore.Save(installation);
-
-        return RequestResult<Installation>.Success(installation);
     }
 }

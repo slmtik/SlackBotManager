@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Core.ApiClient;
 
-public abstract class BaseApiClient<TResponse>(HttpClient httpClient,
-                                               ILogger<BaseApiClient<TResponse>> logger) where TResponse : BaseResponse
+public abstract class ApiClientBase<TResponse>(HttpClient httpClient,
+                                               ILogger<ApiClientBase<TResponse>> logger) where TResponse : ResponseBase
 {
     protected readonly HttpClient _httpClient = httpClient;
-    protected readonly ILogger<BaseApiClient<TResponse>> _logger = logger;
+    protected readonly ILogger<ApiClientBase<TResponse>> _logger = logger;
 
     public static readonly JsonSerializerOptions ApiJsonSerializerOptions = new()
     {
@@ -21,17 +21,15 @@ public abstract class BaseApiClient<TResponse>(HttpClient httpClient,
     {
         var result = await ApiCall<TResponse>(request);
 
-        return result.IsSuccesful switch
+        return result.IsSuccessful switch
         {
             true => RequestResult.Success(),
             false => RequestResult.Failure(result.Error!)
         };
     }
 
-    protected virtual Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : TResponse
-    {
-        return ApiCall<T>(_httpClient, request, _logger);
-    }
+    protected virtual Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request) where T : TResponse =>
+        ApiCall<T>(_httpClient, request, _logger);
 
     public virtual Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request) where T : TResponse =>
         ApiCall<T>(httpClient, request, null);

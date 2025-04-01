@@ -19,6 +19,4 @@ public class Command
     public string? EnterpriseId { get; set; }
     [BindProperty(Name = "is_enterprise_install")]
     public bool IsEnterpriseInstall { get; set; }
-    [BindProperty(Name = "response_url")]
-    public string? ResponseUrl { get; set; }
 }

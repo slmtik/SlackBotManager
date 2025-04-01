@@ -4,5 +4,5 @@ namespace Slack.Models.ElementStates;
 
 public class UrlInputState : IElementState
 {
-    public string Value { get; set; } = string.Empty;
+    public string? Value { get; set; }
 }

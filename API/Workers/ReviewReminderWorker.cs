@@ -38,15 +38,15 @@ public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpCli
 
     private readonly Dictionary<InstanceData, ReviewReminder> _reminderMessages = [];
 
-    public const string HttpClientName = "SlackClientForWorker";
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
             using IServiceScope serviceScope = serviceProvider.CreateScope();
             var queueStateStore = serviceScope.ServiceProvider.GetRequiredService<IQueueStateStore>();
-            var slackClient = httpClientFactory.CreateClient(HttpClientName);
+            var slackClient = httpClientFactory.CreateClient();
+            slackClient.BaseAddress = new Uri("https://www.slack.com/api/");
+            slackClient.Timeout = TimeSpan.FromSeconds(30);
 
             foreach (var instanceQueue in (await ((FileStoreBase<QueueState>)queueStateStore).FindAll())
                                                  .Where(q => q.ReviewQueue.Count > 0)
@@ -91,7 +91,7 @@ public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpCli
                                                               installation!.BotToken!,
                                                               reminderSettings.RemindingChannelId,
                                                               reminderSettings.MessageTemplate);
-                        if (response.IsSuccesful) reminder.UpdateLastRemindedTime();
+                        if (response.IsSuccessful) reminder.UpdateLastRemindedTime();
                     }
                 }
             }

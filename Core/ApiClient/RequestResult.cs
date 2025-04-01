@@ -1,20 +1,13 @@
 ﻿namespace Core.ApiClient;
 
-public class RequestResult : IRequestResult
+public record RequestResult(bool IsSuccessful, string? Error) : IRequestResult
 {
-    public bool IsSuccesful { get; set; }
-    public string? Error { get; set; }
-
-    public static RequestResult Success() => new() { IsSuccesful = true };
-    public static RequestResult Failure(string errorMessage) => new() { IsSuccesful = false, Error = errorMessage };
+    public static RequestResult Success() => new(true, null);
+    public static RequestResult Failure(string errorMessage) => new(false, errorMessage);
 }
 
-public class RequestResult<T> : IRequestResult<T>
+public record RequestResult<T>(bool IsSuccessful, T? Value, string? Error) : IRequestResult<T>
 {
-    public bool IsSuccesful { get; set; }
-    public string? Error { get; set; }
-    public T? Value { get; set; }
-
-    public static RequestResult<T> Success(T value) => new() { IsSuccesful = true, Value = value };
-    public static RequestResult<T> Failure(string errorMessage) => new() { IsSuccesful = false, Error = errorMessage };
+    public static RequestResult<T> Success(T Value) => new(true, Value, null);
+    public static RequestResult<T> Failure(string errorMessage) => new(false, default, errorMessage);
 }

@@ -5,18 +5,17 @@ using Slack;
 using API.Services;
 using API.MIddlewares;
 using API.Interfaces.Invocations;
+using API.Interfaces;
+using API.VersionStrategists;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient<SlackClient>((client) =>
 {
-    client.BaseAddress = new Uri("https://www.slack.com/api/");
+    client.BaseAddress = new Uri("https://slack.com/api/");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddScoped<IOAuthStateStore, FileOAuthStateStore>();
@@ -26,29 +25,25 @@ builder.Services.AddScoped<IQueueStateStore, FileQueueStateStore>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PullRequestInvocation>();
 builder.Services.AddScoped<IInvocation, PullRequestInvocation>(sp => sp.GetRequiredService<PullRequestInvocation>());
-builder.Services.AddScoped<IInvocation, HomeTabInvocation>(sp =>
-    new HomeTabInvocation(sp.GetRequiredService<ISettingStore>(), 
-                          sp.GetRequiredService<QueueStateManager>(),
-                          sp.GetRequiredService<PullRequestInvocation>())
-);
-builder.Services.AddTransient<SlackManager>();
-builder.Services.AddTransient<QueueStateManager>();
-builder.Services.AddTransient<SlackTokenRotator>();
+builder.Services.AddScoped<IInvocation, HomeTabInvocation>();
+builder.Services.AddScoped<SlackManager>();
+builder.Services.AddScoped<SlackOAuthHelper>();
+builder.Services.AddScoped<QueueStateManager>();
+builder.Services.AddScoped<SlackTokenRotator>();
 builder.Services.AddHostedService<ReviewReminderWorker>();
-builder.Services.AddHttpClient(ReviewReminderWorker.HttpClientName, (client) =>
-{
-    client.BaseAddress = new Uri("https://www.slack.com/api/");
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IVersionStrategistResolver, VersionStrategistResolver>();
+builder.Services.AddScoped<IVersionStrategist, NoVersionStrategist>();
+builder.Services.AddScoped<IVersionStrategist, ManualVersionStrategist>();
+builder.Services.AddScoped<IVersionStrategist, ParseLoginPageVersionStrategist>();
+builder.Services.AddScoped<WebhookSender>();
+builder.Services.AddScoped<ChannelMonitorVersionStrategist>();
+builder.Services.AddScoped<IVersionStrategist>(sp => sp.GetRequiredService<ChannelMonitorVersionStrategist>());
+builder.Services.AddScoped<IInvocation>(sp => sp.GetRequiredService<ChannelMonitorVersionStrategist>());
+
+builder.Host.UseWindowsService();
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-app.UseSwagger();
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwaggerUI();
-}
 
 app.UseHttpsRedirection();
 

@@ -11,6 +11,6 @@ public class BlockActionsPayload : IInteractionPayload
     public Channel? Channel { get; set; }
     public Enterprise? Enterprise { get; set; }
     public Team? Team { get; set; }
-    public User User { get; set; }
+    public required User User { get; set; }
     public bool IsEnterpriseInstall { get; set; }
 }

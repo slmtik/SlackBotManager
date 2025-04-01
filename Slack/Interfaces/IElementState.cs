@@ -13,6 +13,8 @@ namespace Slack.Interfaces;
 [JsonDerivedType(typeof(PlainTextInputState), typeDiscriminator: "plain_text_input")]
 [JsonDerivedType(typeof(MultiExternalSelectState), typeDiscriminator: "multi_external_select")]
 [JsonDerivedType(typeof(TimePickerState), typeDiscriminator: "timepicker")]
+[JsonDerivedType(typeof(RadioButtonState), typeDiscriminator: "radio_buttons")]
+[JsonDerivedType(typeof(StaticSelectState), typeDiscriminator: "static_select")]
 public interface IElementState
 {
 }

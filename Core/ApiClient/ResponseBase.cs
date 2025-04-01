@@ -1,5 +1,5 @@
 ﻿namespace Core.ApiClient;
 
-public class BaseResponse
+public class ResponseBase
 {
 }

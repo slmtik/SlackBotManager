@@ -2,7 +2,7 @@
 
 namespace Slack.DTO;
 
-public class SlackResponse: BaseResponse
+public class SlackResponse: ResponseBase
 {
     public bool Ok { get; set; }
     public string? Error { get; set; }

@@ -4,5 +4,5 @@ namespace Slack.Models.ElementStates;
 
 public class SelectPublicChannelState : IElementState
 {
-    public string? SelectedChannel { get; set; }
+    public required string SelectedChannel { get; set; }
 }

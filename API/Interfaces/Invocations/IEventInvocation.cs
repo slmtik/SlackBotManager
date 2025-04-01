@@ -1,9 +1,9 @@
-﻿using Slack;
+﻿using Core.ApiClient;
 using Slack.Models.Events;
 
 namespace API.Interfaces.Invocations;
 
 public interface IEventInvocation : IInvocation
 {
-    public Dictionary<string, Func<SlackClient, EventPayload, Task>> EventBindings { get; }
+    public Dictionary<string, Func<EventPayload, Task<IRequestResult>>> EventBindings { get; }
 }

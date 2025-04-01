@@ -44,7 +44,7 @@ public class SlackTokenRotator(IInstallationStore installationStore, SlackClient
             return null;
 
         var oAuthResult = await _client.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.BotRefreshToken });
-        if (!oAuthResult.IsSuccesful)
+        if (!oAuthResult.IsSuccessful)
             return null;
 
         var oAuthData = oAuthResult.Value!;
@@ -66,7 +66,7 @@ public class SlackTokenRotator(IInstallationStore installationStore, SlackClient
             return null;
 
         var oAuthResult = await _client.OAuthV2Success(new() { GrantType = "refresh_token", RefreshToken = installation.UserRefreshToken });
-        if (!oAuthResult.IsSuccesful)
+        if (!oAuthResult.IsSuccessful)
             return null;
 
         var oAuthData = oAuthResult.Value!;

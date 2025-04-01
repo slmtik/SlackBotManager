@@ -9,9 +9,9 @@ namespace Persistence.FileStores;
 
 public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
 {
-    abstract protected string ConfigurationSection { get; }
-    abstract protected string ConfigurationFolder { get; }
-    abstract protected string ConfigurationFile { get; }
+    protected abstract string ConfigurationSection { get; }
+    protected abstract string ConfigurationFolder { get; }
+    protected abstract string ConfigurationFile { get; }
     protected const string _placeholder = "none";
     protected readonly string _directory;
 
@@ -82,7 +82,7 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
     public async Task<Collection<T>> FindAll()
     {
         var allData = new Collection<T>();
-        DirectoryInfo directoryInfo = new DirectoryInfo(_directory);
+        var directoryInfo = new DirectoryInfo(_directory);
         if (directoryInfo.Exists)
         {
             foreach (var directory in directoryInfo.GetDirectories().Select(d => d.Name.Split("-")))

@@ -4,32 +4,34 @@ using Persistence.Interfaces;
 using API.Services;
 using Slack.Models.Events;
 using Slack.Models.Commands;
+using Slack.Interfaces;
+using Slack;
+using System.Text.Json;
+using Persistence.Models;
 
 namespace API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 public class SlackController(SlackManager slackManager,
+                             SlackOAuthHelper slackOAuthHelper,
                              IOAuthStateStore oAuthStateStore,
-                             IHostEnvironment hostEnvironment) : ControllerBase
+                             IHostEnvironment hostEnvironment,
+                             IInstallationStore installationStore) : ControllerBase
 {
-    private readonly SlackManager _slackManager = slackManager;
-    private readonly IOAuthStateStore _oAuthStateStore = oAuthStateStore;
-    private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
-
     [HttpPost]
     [Route("commands")]
     public async Task<ActionResult> HandleCommands([FromForm] Command slackCommand)
     {
         string commandPrefix = "/";
-        if (_hostEnvironment.IsDevelopment() || _hostEnvironment.IsStaging())
-            commandPrefix = $"/{(_hostEnvironment.IsDevelopment() ? "dev" : "stage")}_";
+        if (hostEnvironment.IsDevelopment() || hostEnvironment.IsStaging())
+            commandPrefix = $"/{(hostEnvironment.IsDevelopment() ? "dev" : "stage")}_";
 
         slackCommand.CommandText = $"/{slackCommand.CommandText[commandPrefix.Length..]}";
 
-        var requestResult = await _slackManager.HandleCommand(slackCommand);
+        var requestResult = await slackManager.HandleCommand(slackCommand);
 
-        if (!requestResult.IsSuccesful)
+        if (!requestResult.IsSuccessful)
             return Ok(requestResult.Error);
         return Ok();
     }
@@ -38,15 +40,16 @@ public class SlackController(SlackManager slackManager,
     [Route("interactions")]
     public async Task<ActionResult> HandleInteractions([FromForm] string payload)
     {
-        var requestResult = await _slackManager.HandleInteractionPayload(payload);
+        var interactionPayload = JsonSerializer.Deserialize<IInteractionPayload>(payload, SlackClient.ApiJsonSerializerOptions);
+        var requestResult = await slackManager.HandleInteractionPayload(interactionPayload);
 
-        if (!requestResult.IsSuccesful)
+        if (!requestResult.IsSuccessful)
         {
             try
             {
                 return Ok(JsonNode.Parse(requestResult.Error!));
             }
-            catch (System.Text.Json.JsonException)
+            catch (JsonException)
             {
                 return Ok(requestResult.Error);
             }
@@ -57,18 +60,71 @@ public class SlackController(SlackManager slackManager,
 
     [HttpPost]
     [Route("events")]
-    public async Task<ActionResult> HandleEvents(EventPayload payload)
+    public async Task<ActionResult> HandleEvents(JsonNode payloadJSON)
     {
-        await _slackManager.HandleEventPayload(payload);
+        payloadJSON["event"] = MakeTypePropertyFirstInEvent(payloadJSON["event"]);
+
+        var payload = JsonSerializer.Deserialize<EventPayload>(payloadJSON, SlackClient.ApiJsonSerializerOptions);
+
+        if (payload.Event is MessageChannelsEvent messageChannelsEvent && await IgnoreMessageEvent(messageChannelsEvent))
+            return Ok();
+
+        var requestResult = await slackManager.HandleEventPayload(payload);
+
+        if (!requestResult.IsSuccessful)
+        {
+            try
+            {
+                return Ok(JsonNode.Parse(requestResult.Error!));
+            }
+            catch (JsonException)
+            {
+                return Ok(requestResult.Error);
+            }
+        }
+
         return Ok();
+    }
+
+    private async Task<bool> IgnoreMessageEvent(MessageChannelsEvent messageChannelsEvent)
+    {
+        if (!(string.IsNullOrEmpty(messageChannelsEvent.SubType)))
+            return true;
+
+        if (await installationStore.Find() is Installation installation && (installation.BotUserId?.Equals(messageChannelsEvent.User) ?? false))
+            return true;
+
+        return false;
+    }
+
+    private static JsonNode MakeTypePropertyFirstInEvent(JsonNode? eventNode)
+    {
+        if (eventNode is JsonObject jsonObject)
+        {
+            if (jsonObject.Count > 0 && jsonObject.FirstOrDefault().Key != "type")
+            {
+                var reorderedJsonObject = new JsonObject();
+                if (jsonObject.TryGetPropertyValue("type", out var type))
+                {
+                    reorderedJsonObject["type"] = type?.DeepClone();
+                    jsonObject.Remove("type");
+                }
+                foreach (var kvp in jsonObject)
+                {
+                    reorderedJsonObject[kvp.Key] = kvp.Value?.DeepClone();
+                }
+                return reorderedJsonObject;
+            }
+        }
+        return eventNode ?? new JsonObject();
     }
 
     [HttpGet]
     [Route("install", Name="SlackOAuthInstall")]
     public ContentResult OAuthStart()
     {
-        var state = _oAuthStateStore.Issue();
-        var url = _slackManager.GenerateOAuthURL(state);
+        var state = oAuthStateStore.Issue();
+        var url = slackOAuthHelper.GenerateOAuthURL(state);
 
         return base.Content($@"
             <html>
@@ -90,12 +146,12 @@ public class SlackController(SlackManager slackManager,
     {
         if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(state))
         {
-            if (!_oAuthStateStore.Consume(state))
+            if (!oAuthStateStore.Consume(state))
                 return base.Content(RenderFailurePage(Url.Link("OAuthInstall", null), "the state value is already expired"), "text/html");
 
-            var result = await _slackManager.ProcessOauthCallback(code);
+            var result = await slackOAuthHelper.ProcessOauthCallback(code);
 
-            if (result.IsSuccesful && result.Value is not null)
+            if (result.IsSuccessful && result.Value is not null)
                 return base.Content(RenderSuccessPage(result.Value.AppId, result.Value.TeamId, result.Value.IsEnterpriseInstall, result.Value.EnterpriseUrl),
                                     "text/html");
 

@@ -2,7 +2,7 @@
 
 namespace Slack.Models.Elements;
 
-public class SelectUser : IElement
+public class SelectUser : IInputElement
 {
     public string? ActionId { get; set; }
     public string? InitialUser { get; set; }

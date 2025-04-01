@@ -7,4 +7,5 @@ public record Setting : StoreItemBase
     public IEnumerable<string> Tags { get; set; } = ["#usefull", "#easy"];
     public string[]? ApplicationAdminUsers { get; set; }
     public ReminderSetting? ReminderSetting { get; set; }
+    public WebhookSetting? WebhookSetting { get; set; }
 }

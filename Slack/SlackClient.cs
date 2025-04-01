@@ -14,7 +14,7 @@ namespace Slack;
 public class SlackClient(HttpClient httpClient,
                          IConfiguration configuration,
                          ILogger<SlackClient> logger,
-                         IHttpContextAccessor httpContextAccessor) : BaseApiClient<SlackResponse>(httpClient, logger)
+                         IHttpContextAccessor httpContextAccessor) : ApiClientBase<SlackResponse>(httpClient, logger)
 {
     private readonly string _clientId = configuration["Slack:ClientId"] ?? throw new ArgumentException("Slack ClientId is not provided");
     private readonly string _clientSecret = configuration["Slack:ClientSecret"] ?? throw new ArgumentException("Slack ClientSecret is not provided");
@@ -25,7 +25,7 @@ public class SlackClient(HttpClient httpClient,
     {
         request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
 
-        return base.ApiCall<T>(_httpClient, request, _logger);
+        return ApiCall<T>(_httpClient, request, _logger);
     }
 
     override public async Task<IRequestResult<T>> ApiCall<T>(HttpClient httpClient, HttpRequestMessage request, ILogger? logger)
@@ -130,7 +130,6 @@ public class SlackClient(HttpClient httpClient,
     {
         var query = HttpUtility.ParseQueryString(string.Empty);
         query["channel"] = channelId;
-
         return ApiCall<ConversationInfoResponse>(new(HttpMethod.Get, $"conversations.info?{query}"));
     }
 

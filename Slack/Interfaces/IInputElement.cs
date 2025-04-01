@@ -11,6 +11,8 @@ namespace Slack.Interfaces;
 [JsonDerivedType(typeof(Checkboxes), typeDiscriminator: "checkboxes")]
 [JsonDerivedType(typeof(SelectPublicChannel), typeDiscriminator: "channels_select")]
 [JsonDerivedType(typeof(TimePicker), typeDiscriminator: "timepicker")]
+[JsonDerivedType(typeof(SelectUser), typeDiscriminator: "users_select")]
+[JsonDerivedType(typeof(StaticSelect), typeDiscriminator: "static_select")]
 public interface IInputElement : IElement
 {
     public string? ActionId { get; set; }
