@@ -20,7 +20,15 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
     protected FileStoreBase(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
     {
         _directory = configuration[ConfigurationSection] ??
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SlackBotManager", ConfigurationFolder);
+            Path.Combine(
+                Environment.GetFolderPath(
+                    string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"))
+                        ? Environment.SpecialFolder.ApplicationData
+                        : Environment.SpecialFolder.UserProfile
+                ),
+                "SlackBotManager", ConfigurationFolder
+            );
+
         _httpContextAccessor = httpContextAccessor;
     }
 
