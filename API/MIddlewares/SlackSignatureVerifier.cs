@@ -49,6 +49,9 @@ public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configu
         if (string.IsNullOrEmpty(stringToSign))
             stringToSign = string.Empty;
 
+        if (string.IsNullOrEmpty(_signingSecret))
+            throw new ArgumentException(nameof(_signingSecret));
+
         using var sha256 = new HMACSHA256(Encoding.UTF8.GetBytes(_signingSecret));
         var messageHash = sha256.ComputeHash(Encoding.UTF8.GetBytes($"v0:{timestamp}:{stringToSign}"));
         return $"v0={string.Concat(messageHash.Select(b => b.ToString("x2")))}";

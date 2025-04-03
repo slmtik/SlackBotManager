@@ -23,7 +23,7 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
             Path.Combine(
                 Environment.GetFolderPath(
                     string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"))
-                        ? Environment.SpecialFolder.ApplicationData
+                        ? Environment.SpecialFolder.CommonApplicationData
                         : Environment.SpecialFolder.UserProfile
                 ),
                 "SlackBotManager", ConfigurationFolder

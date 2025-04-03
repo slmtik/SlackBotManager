@@ -7,10 +7,9 @@ using API.MIddlewares;
 using API.Interfaces.Invocations;
 using API.Interfaces;
 using API.VersionStrategists;
+using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<SlackClient>((client) =>
@@ -41,7 +40,14 @@ builder.Services.AddScoped<ChannelMonitorVersionStrategist>();
 builder.Services.AddScoped<IVersionStrategist>(sp => sp.GetRequiredService<ChannelMonitorVersionStrategist>());
 builder.Services.AddScoped<IInvocation>(sp => sp.GetRequiredService<ChannelMonitorVersionStrategist>());
 
-builder.Host.UseWindowsService();
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+{
+    builder.Logging.AddEventLog(new Microsoft.Extensions.Logging.EventLog.EventLogSettings()
+    {
+        SourceName = "SlackBotManager"
+    });
+    builder.Host.UseWindowsService();
+}
 
 var app = builder.Build();
 
