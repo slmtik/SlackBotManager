@@ -51,7 +51,11 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 
 var app = builder.Build();
 
-app.UseHttpsRedirection();
+bool useHttps = builder.Configuration.GetValue("UseHttpsRedirection", true);
+if (useHttps)
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 
