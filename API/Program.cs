@@ -8,8 +8,15 @@ using API.Interfaces.Invocations;
 using API.Interfaces;
 using API.VersionStrategists;
 using System.Runtime.InteropServices;
+using Core;
 
 var builder = WebApplication.CreateBuilder(args);
+
+bool useSocketMode = builder.Configuration.GetValue("Slack:SocketMode:Enabled", false);
+if (useSocketMode)
+{
+    builder.Services.AddHostedService<SlackSocketModeService>();
+}
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<SlackClient>((client) =>
@@ -22,6 +29,7 @@ builder.Services.AddScoped<IInstallationStore, FileInstallationStore>();
 builder.Services.AddScoped<ISettingStore, FileSettingStore>();
 builder.Services.AddScoped<IQueueStateStore, FileQueueStateStore>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<PullRequestInvocation>();
 builder.Services.AddScoped<IInvocation, PullRequestInvocation>(sp => sp.GetRequiredService<PullRequestInvocation>());
 builder.Services.AddScoped<IInvocation, HomeTabInvocation>();
@@ -67,8 +75,9 @@ app.UseWhen(
                 || context.Request.Path.ToString() == "/api/slack/events",
     app =>
     {
-        app.UseMiddleware<SlackSignatureVerifier>();
-        app.UseMiddleware<InstallationTokenVerifier>();
+        app.UseMiddleware<SlackSignatureVerificationMiddleware>();
+        app.UseMiddleware<SlackUrlVerificationMiddleware>();
+        app.UseMiddleware<SlackTokenRotationMiddleware>();
     });
 
 app.Run();

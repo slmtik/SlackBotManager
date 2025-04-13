@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Core;
 using Microsoft.Extensions.Configuration;
 using Persistence.Interfaces;
 using Persistence.Models;
@@ -15,9 +15,9 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
     protected const string _placeholder = "none";
     protected readonly string _directory;
 
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly RequestContext _requestContext;
 
-    protected FileStoreBase(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
+    protected FileStoreBase(IConfiguration configuration, RequestContext requestContext)
     {
         _directory = configuration[ConfigurationSection] ??
             Path.Combine(
@@ -29,7 +29,7 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
                 "SlackBotManager", ConfigurationFolder
             );
 
-        _httpContextAccessor = httpContextAccessor;
+        _requestContext = requestContext;
     }
 
     public virtual async Task<T?> Find(string? enterpriseId, string? teamId, bool? isEnterpriseInstall)
@@ -51,13 +51,7 @@ public abstract class FileStoreBase<T> : IStore<T> where T : StoreItemBase
 
     private InstanceData GetInstanceDataFromContext()
     {
-        if (_httpContextAccessor.HttpContext is HttpContext httpContext)
-        {
-            if (httpContext.Items[InstanceData.HttpContextKey] != null)
-                return (InstanceData)httpContext.Items[InstanceData.HttpContextKey]!;
-            throw new InvalidOperationException($"There is no Instance Data in the {nameof(HttpContext)}");
-        }
-        throw new InvalidOperationException($"There is no {nameof(HttpContext)}, please use in the correct place");
+        return _requestContext.InstanceData ?? throw new InvalidOperationException($"There is no Instance Data in the {nameof(RequestContext)}");
     }
 
     public virtual Task<T?> Find()

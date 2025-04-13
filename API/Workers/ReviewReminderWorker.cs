@@ -8,10 +8,11 @@ using Slack;
 using API.Services;
 using Slack.DTO;
 using Core.ApiClient;
+using Core;
 
 namespace API.Workers;
 
-public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpClientFactory httpClientFactory, IServiceProvider serviceProvider) : BackgroundService
+public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IServiceProvider serviceProvider) : BackgroundService
 {
     private record ReviewReminder
     {
@@ -44,9 +45,7 @@ public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpCli
         {
             using IServiceScope serviceScope = serviceProvider.CreateScope();
             var queueStateStore = serviceScope.ServiceProvider.GetRequiredService<IQueueStateStore>();
-            var slackClient = httpClientFactory.CreateClient();
-            slackClient.BaseAddress = new Uri("https://www.slack.com/api/");
-            slackClient.Timeout = TimeSpan.FromSeconds(30);
+            var slackClient = serviceScope.ServiceProvider.GetRequiredService<SlackClient>();
 
             foreach (var instanceQueue in (await ((FileStoreBase<QueueState>)queueStateStore).FindAll())
                                                  .Where(q => q.ReviewQueue.Count > 0)
@@ -87,10 +86,8 @@ public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpCli
 
                     if (reminder.IsTimePassed(reminderSettings!.TimeToRemindInMinutes))
                     {
-                        var response = await SlackPostMessage(slackClient,
-                                                              installation!.BotToken!,
-                                                              reminderSettings.RemindingChannelId,
-                                                              reminderSettings.MessageTemplate);
+                        slackClient.AuthToken = installation.BotToken;
+                        var response = await slackClient.ChatPostMessage(new(reminderSettings.RemindingChannelId, reminderSettings.MessageTemplate));
                         if (response.IsSuccessful) reminder.UpdateLastRemindedTime();
                     }
                 }
@@ -98,35 +95,5 @@ public class ReviewReminderWorker(ILogger<ReviewReminderWorker> logger, IHttpCli
 
             await Task.Delay(60_000, stoppingToken);
         }
-    }
-
-    private async Task<IRequestResult> SlackPostMessage(HttpClient slackClient, string botToken, string channelId, string messageText)
-    {
-        var message = new ChatPostMessageRequest(channelId, messageText);
-        string body = JsonSerializer.Serialize(message, SlackClient.ApiJsonSerializerOptions);
-        StringContent content = new(body, Encoding.UTF8, "application/json");
-        HttpRequestMessage reminderRequest = new(HttpMethod.Post, "chat.postMessage") { Content = content };
-        reminderRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", botToken);
-
-        var response = await slackClient.SendAsync(reminderRequest);
-        response.EnsureSuccessStatusCode();
-        ChatPostMessageResponse result = (await response.Content.ReadFromJsonAsync<ChatPostMessageResponse>(SlackClient.ApiJsonSerializerOptions))!;
-
-        logger?.LogDebug("API response {HttpMethod} {RequestUri}:\n{ResponseMessage}",
-            reminderRequest.Method,
-            reminderRequest.RequestUri,
-            await response.Content.ReadAsStringAsync());
-
-        if (!result.Ok)
-        {
-            logger?.LogError("Slack API error {HttpMethod} {RequestUri} {SlackError}\n{ResponseMetadata}",
-                             reminderRequest.Method,
-                             reminderRequest.RequestUri,
-                             result.Error,
-                             string.Join("\n", result.ResponseMetadata?.Messages ?? []));
-            return RequestResult<ChatPostMessageResponse>.Failure(result.Error ?? string.Empty);
-        }
-
-        return RequestResult<ChatPostMessageResponse>.Success(result);
     }
 }

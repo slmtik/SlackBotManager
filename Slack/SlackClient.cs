@@ -4,26 +4,26 @@ using System.Text;
 using System.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Http;
 using Slack.Models.Views;
 using Slack.DTO;
 using Core.ApiClient;
+using Core;
 
 namespace Slack;
 
 public class SlackClient(HttpClient httpClient,
                          IConfiguration configuration,
                          ILogger<SlackClient> logger,
-                         IHttpContextAccessor httpContextAccessor) : ApiClientBase<SlackResponse>(httpClient, logger)
+                         RequestContext requestContext) : ApiClientBase<SlackResponse>(httpClient, logger)
 {
     private readonly string _clientId = configuration["Slack:ClientId"] ?? throw new ArgumentException("Slack ClientId is not provided");
     private readonly string _clientSecret = configuration["Slack:ClientSecret"] ?? throw new ArgumentException("Slack ClientSecret is not provided");
 
-    public const string BotTokenHttpContextKey = "bot_token";
+    public string? AuthToken { get; set; }
 
     override protected Task<IRequestResult<T>> ApiCall<T>(HttpRequestMessage request)
     {
-        request.Headers.Authorization ??= new AuthenticationHeaderValue("Bearer", httpContextAccessor.HttpContext.Items[BotTokenHttpContextKey].ToString());
+        request.Headers.Authorization ??=  new AuthenticationHeaderValue("Bearer", AuthToken ?? requestContext.BotToken);
 
         return ApiCall<T>(_httpClient, request, _logger);
     }

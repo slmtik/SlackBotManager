@@ -5,7 +5,7 @@ using System.Text;
 
 namespace API.MIddlewares;
 
-public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configuration)
+public class SlackSignatureVerificationMiddleware(RequestDelegate next, IConfiguration configuration)
 {
     private readonly RequestDelegate _next = next;
     private readonly string _signingSecret = configuration["Slack:SigningSecret"];
@@ -14,6 +14,7 @@ public class SlackSignatureVerifier(RequestDelegate next, IConfiguration configu
     {
         context.Request.EnableBuffering();
         var body = await context.Request.BodyReader.GetStringFromPipe();
+        context.Items["RawBody"] = body;
         context.Request.Body.Position = 0;
 
         if (!ValidateSignature(body, context.Request.Headers))

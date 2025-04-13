@@ -1,22 +1,25 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 
 namespace Slack.Models.Commands;
 
 public class Command
 {
-    [BindProperty(Name = "command")]
+    [FromForm(Name = "command")]
+    [JsonPropertyName("command")]
     public string CommandText { get; set; }
-
-    [BindProperty(Name = "user_id")]
+    [FromForm(Name = "user_id")]
     public string UserId { get; set; }
-    [BindProperty(Name = "trigger_id")]
+    [FromForm(Name = "trigger_id")]
     public string TriggerId { get; set; }
-    [BindProperty(Name = "channel_id")]
+    [FromForm(Name = "channel_id")]
     public string ChannelId { get; set; }
-    [BindProperty(Name = "team_id")]
+    [FromForm(Name = "team_id")]
     public string? TeamId { get; set; }
-    [BindProperty(Name = "enterprise_id")]
+    [FromForm(Name = "enterprise_id")]
     public string? EnterpriseId { get; set; }
-    [BindProperty(Name = "is_enterprise_install")]
+    [FromForm(Name = "is_enterprise_install")]
+    [JsonConverter(typeof(SlackStringBooleanConverter))]
     public bool IsEnterpriseInstall { get; set; }
+    public string? ResponseUrl { get; set; }
 }

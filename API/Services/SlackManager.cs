@@ -4,13 +4,18 @@ using Slack.Models.Events;
 using Slack.Models.Commands;
 using Slack.Models.Payloads;
 using Core.ApiClient;
+using System.Text.Json.Nodes;
+using Persistence.Interfaces;
+using Persistence.Models;
+using Microsoft.Extensions.Hosting;
 
 namespace API.Services;
 
 public class SlackManager
 {
     private readonly ILogger<SlackManager> _logger;
-
+    private readonly IInstallationStore _installationStore;
+    private readonly IHostEnvironment _hostEnvironment;
     private readonly Dictionary<string, Func<Command, Task<IRequestResult>>> _commands = [];
     private readonly Dictionary<string, Func<ViewSubmissionPayload, Task<IRequestResult>>> _viewSubmissionInteractions = [];
     private readonly Dictionary<string, Func<ViewClosedPayload, Task<IRequestResult>>> _viewClosedInteractions = [];
@@ -18,9 +23,13 @@ public class SlackManager
     private readonly Dictionary<string, Func<EventPayload, Task<IRequestResult>>> _events = [];
 
     public SlackManager(IEnumerable<IInvocation> invocations,
-                        ILogger<SlackManager> logger)
+                        ILogger<SlackManager> logger,
+                        IInstallationStore installationStore,
+                        IHostEnvironment hostEnvironment)
     {
         _logger = logger;
+        _installationStore = installationStore;
+        _hostEnvironment = hostEnvironment;
         AddInvocation(invocations);
     }
 
@@ -71,11 +80,37 @@ public class SlackManager
         return Task.FromResult<IRequestResult>(RequestResult.Failure($"The requested {interactionType} interaction is not handled yet."));
     }
 
-    public Task<IRequestResult> HandleCommand(Command slackCommand) =>
-        HandleInteraction(slackCommand.CommandText, _commands, slackCommand, "Command");
+    public Task<IRequestResult> HandleCommand(Command slackCommand)
+    {
+        string commandPrefix = "/";
+        if (_hostEnvironment.IsDevelopment() || _hostEnvironment.IsStaging())
+            commandPrefix = $"/{(_hostEnvironment.IsDevelopment() ? "dev" : "stage")}_";
 
-    public Task<IRequestResult> HandleEventPayload(EventPayload payload) =>
-        HandleInteraction(payload.Event.Type, _events, payload, "Event");
+        slackCommand.CommandText = $"/{slackCommand.CommandText[commandPrefix.Length..]}";
+
+        return HandleInteraction(slackCommand.CommandText, _commands, slackCommand, "Command");
+    }
+
+    public async Task<IRequestResult> HandleEventPayload(EventPayload payload)
+    {
+        if (await EventShouldBeSkipped(payload))
+            return RequestResult.Success();
+
+        return await HandleInteraction(payload.Event.Type, _events, payload, "Event");
+    }
+
+    private async Task<bool> EventShouldBeSkipped(EventPayload payload)
+    {
+        if (payload.Event is MessageChannelsEvent messageChannelsEvent)
+        {
+            if(!string.IsNullOrEmpty(messageChannelsEvent.SubType))
+                return true;
+
+            if (await _installationStore.Find() is Installation installation && (installation.BotUserId?.Equals(messageChannelsEvent.User) ?? false))
+                return true;
+        }
+        return false;
+    }
 
     public Task<IRequestResult> HandleInteractionPayload(IInteractionPayload payload) =>
         payload switch
@@ -116,5 +151,27 @@ public class SlackManager
                            payload.Actions.First().ActionId);
 
         return Task.FromResult<IRequestResult>(RequestResult.Failure("The requested block action interaction is not handled yet."));
+    }
+
+    public static JsonNode MakeTypePropertyFirstInPayload(JsonNode? payload)
+    {
+        if (payload is JsonObject jsonObject)
+        {
+            if (jsonObject.Count > 0 && jsonObject.FirstOrDefault().Key != "type")
+            {
+                var reorderedJsonObject = new JsonObject();
+                if (jsonObject.TryGetPropertyValue("type", out var type))
+                {
+                    reorderedJsonObject["type"] = type?.DeepClone();
+                    jsonObject.Remove("type");
+                }
+                foreach (var kvp in jsonObject)
+                {
+                    reorderedJsonObject[kvp.Key] = kvp.Value?.DeepClone();
+                }
+                return reorderedJsonObject;
+            }
+        }
+        return payload ?? new JsonObject();
     }
 }

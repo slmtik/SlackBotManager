@@ -1,6 +1,7 @@
 ﻿using Persistence.Models;
 using Persistence.Interfaces;
 using Slack;
+using Core;
 
 namespace API.Services;
 

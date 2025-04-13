@@ -7,7 +7,6 @@ using Slack.Models.Commands;
 using Slack.Interfaces;
 using Slack;
 using System.Text.Json;
-using Persistence.Models;
 
 namespace API.Controllers;
 
@@ -15,20 +14,12 @@ namespace API.Controllers;
 [ApiController]
 public class SlackController(SlackManager slackManager,
                              SlackOAuthHelper slackOAuthHelper,
-                             IOAuthStateStore oAuthStateStore,
-                             IHostEnvironment hostEnvironment,
-                             IInstallationStore installationStore) : ControllerBase
+                             IOAuthStateStore oAuthStateStore) : ControllerBase
 {
     [HttpPost]
     [Route("commands")]
     public async Task<ActionResult> HandleCommands([FromForm] Command slackCommand)
     {
-        string commandPrefix = "/";
-        if (hostEnvironment.IsDevelopment() || hostEnvironment.IsStaging())
-            commandPrefix = $"/{(hostEnvironment.IsDevelopment() ? "dev" : "stage")}_";
-
-        slackCommand.CommandText = $"/{slackCommand.CommandText[commandPrefix.Length..]}";
-
         var requestResult = await slackManager.HandleCommand(slackCommand);
 
         if (!requestResult.IsSuccessful)
@@ -62,13 +53,9 @@ public class SlackController(SlackManager slackManager,
     [Route("events")]
     public async Task<ActionResult> HandleEvents(JsonNode payloadJSON)
     {
-        payloadJSON["event"] = MakeTypePropertyFirstInEvent(payloadJSON["event"]);
+        payloadJSON["event"] = SlackManager.MakeTypePropertyFirstInPayload(payloadJSON["event"]);
 
         var payload = JsonSerializer.Deserialize<EventPayload>(payloadJSON, SlackClient.ApiJsonSerializerOptions);
-
-        if (payload.Event is MessageChannelsEvent messageChannelsEvent && await IgnoreMessageEvent(messageChannelsEvent))
-            return Ok();
-
         var requestResult = await slackManager.HandleEventPayload(payload);
 
         if (!requestResult.IsSuccessful)
@@ -86,38 +73,7 @@ public class SlackController(SlackManager slackManager,
         return Ok();
     }
 
-    private async Task<bool> IgnoreMessageEvent(MessageChannelsEvent messageChannelsEvent)
-    {
-        if (!(string.IsNullOrEmpty(messageChannelsEvent.SubType)))
-            return true;
-
-        if (await installationStore.Find() is Installation installation && (installation.BotUserId?.Equals(messageChannelsEvent.User) ?? false))
-            return true;
-
-        return false;
-    }
-
-    private static JsonNode MakeTypePropertyFirstInEvent(JsonNode? eventNode)
-    {
-        if (eventNode is JsonObject jsonObject)
-        {
-            if (jsonObject.Count > 0 && jsonObject.FirstOrDefault().Key != "type")
-            {
-                var reorderedJsonObject = new JsonObject();
-                if (jsonObject.TryGetPropertyValue("type", out var type))
-                {
-                    reorderedJsonObject["type"] = type?.DeepClone();
-                    jsonObject.Remove("type");
-                }
-                foreach (var kvp in jsonObject)
-                {
-                    reorderedJsonObject[kvp.Key] = kvp.Value?.DeepClone();
-                }
-                return reorderedJsonObject;
-            }
-        }
-        return eventNode ?? new JsonObject();
-    }
+    
 
     [HttpGet]
     [Route("install", Name="SlackOAuthInstall")]
