@@ -18,6 +18,14 @@ if (useSocketMode)
     builder.Services.AddHostedService<SlackSocketModeService>();
 }
 
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.IncludeScopes = false;
+    options.SingleLine = false;
+    options.TimestampFormat = "[yyyy-MM-dd HH:mm:ss] ";
+    options.UseUtcTimestamp = false; // or true if you prefer UTC
+});
+
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<SlackClient>((client) =>
 {

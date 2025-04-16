@@ -1,13 +1,8 @@
-﻿using System.Text;
-using System.Text.Json;
-using System.Net.Http.Headers;
-using Persistence.Interfaces;
+﻿using Persistence.Interfaces;
 using Persistence.Models;
 using Persistence.FileStores;
 using Slack;
 using API.Services;
-using Slack.DTO;
-using Core.ApiClient;
 using Core;
 
 namespace API.Workers;

@@ -203,7 +203,11 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
             return RequestResult.Failure(JsonSerializer.Serialize<ISubmissionResponse>(submitValidationError));
         }
 
-        await _slackClient.ChatDeleteMessage(viewMetadata.ChannelId, viewMetadata.Timestamp);
+        var deleteResult = await _slackClient.ChatDeleteMessage(viewMetadata.ChannelId, viewMetadata.Timestamp);
+        if (!deleteResult.IsSuccessful)
+        {
+            return deleteResult;
+        }
 
         var pullRequestLinks = Enumerable.Range(0, viewMetadata.Branches.Count())
             .Select(i => payload.View.State.Values[$"pull_request_{i}"]["url_input"])
@@ -291,7 +295,7 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
         if (postMessageResult.IsSuccessful)
             await _queueStateManager.FinishCreation(payload.User.Id, postMessageResult.Value!.Timestamp, viewMetadata.Branches);
 
-        return RequestResult.Success();
+        return postMessageResult;
     }
 
     private async Task<IRequestResult> SubmitManageDetailsView(ViewSubmissionPayload payload)

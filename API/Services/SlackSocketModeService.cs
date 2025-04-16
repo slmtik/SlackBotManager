@@ -8,6 +8,7 @@ using Persistence.Interfaces;
 using Slack.Interfaces;
 using Slack.Models.Events;
 using System.Text.Json.Nodes;
+using Core.ApiClient;
 
 namespace API.Services;
 
@@ -92,7 +93,7 @@ public class SlackSocketModeService(IHttpClientFactory httpClientFactory,
                     requestContext.BotToken = installation.BotToken;
                     requestContext.InstanceData = instanceData;
 
-                    Func<JsonNode, SlackManager, Task>? handler = type.ToString() switch
+                    Func<JsonNode, SlackManager, Task<IRequestResult>>? handler = type.ToString() switch
                     {
                         "slash_commands" => HandleCommandPayload,
                         "interactive" => HandleInteractivePayload,
@@ -104,7 +105,13 @@ public class SlackSocketModeService(IHttpClientFactory httpClientFactory,
                     if (handler == null)
                         logger.LogInformation("Unhandled message type {Type}", type.ToString());
                     else
-                        await handler.Invoke(payload, slackManager);
+                    {
+                        var requestResult = await handler.Invoke(payload, slackManager);
+                        if (!requestResult.IsSuccessful)
+                        {
+                            logger.LogWarning("Something went wrong. Message Type: {Type}. Error: {Error}", type.ToString(), requestResult.Error);
+                        }
+                    }
                 }
             }
 
@@ -125,26 +132,28 @@ public class SlackSocketModeService(IHttpClientFactory httpClientFactory,
         }
     }
 
-    private static async Task HandleCommandPayload(JsonNode payload, SlackManager slackManager)
+    private static async Task<IRequestResult> HandleCommandPayload(JsonNode payload, SlackManager slackManager)
     {
         var command = JsonSerializer.Deserialize<Command>(payload, SlackClient.ApiJsonSerializerOptions);
         var requestResult = await slackManager.HandleCommand(command);
 
         if (!requestResult.IsSuccessful) await new HttpClient().PostAsJsonAsync(command.ResponseUrl, new { text = requestResult.Error });
+
+        return requestResult;
     }
 
-    private static async Task HandleInteractivePayload(JsonNode payload, SlackManager slackManager)
+    private static async Task<IRequestResult> HandleInteractivePayload(JsonNode payload, SlackManager slackManager)
     {
         var interactionPayload = JsonSerializer.Deserialize<IInteractionPayload>(payload, SlackClient.ApiJsonSerializerOptions);
-        await slackManager.HandleInteractionPayload(interactionPayload);
+        return await slackManager.HandleInteractionPayload(interactionPayload);
     }
 
-    private static async Task HandleEventsPayload(JsonNode payload, SlackManager slackManager)
+    private static async Task<IRequestResult> HandleEventsPayload(JsonNode payload, SlackManager slackManager)
     {
         payload["event"] = SlackManager.MakeTypePropertyFirstInPayload(payload["event"]);
 
         var eventPayload = JsonSerializer.Deserialize<EventPayload>(payload, SlackClient.ApiJsonSerializerOptions);
-        await slackManager.HandleEventPayload(eventPayload);
+        return await slackManager.HandleEventPayload(eventPayload);
     }
 
     private async Task SendAck(ClientWebSocket socket, JsonNode envelopeId, CancellationToken cancellationToken)

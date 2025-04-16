@@ -256,7 +256,7 @@ public class HomeTabInvocation : IEventInvocation, IBlockActionsInvocation, IVie
         if (!result.IsSuccessful)
             await _slackClient.ViewPublish(payload.User.Id, await BuildHomeView(payload.User.Id, ("pull_request", result.Error!)));
 
-        return RequestResult.Success();
+        return result;
     }
 
     private async Task<IRequestResult> SetChannelToPost(BlockActionsPayload payload)
