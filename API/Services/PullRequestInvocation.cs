@@ -228,7 +228,7 @@ public class PullRequestInvocation : ICommandInvocation, IViewSubmissionInvocati
             {
                 Uri.TryCreate(uis.Value, UriKind.Absolute, out Uri? issueUri);
                 string issueKey = issueUri?.Segments.Last() ?? "Unknown issue";
-                return new { IssueKey = issueKey, Link = $"{uis.Value}" };
+                return new { IssueKey = issueKey, Link = $"<{uis.Value}|{issueKey}>" };
             })
             .ToDictionary(i => i.IssueKey, i => i.Link);
 
